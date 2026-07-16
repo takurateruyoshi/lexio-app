@@ -64,8 +64,9 @@ export function compareKeys(a, b) {
 function straightSequences(maxRank) {
   const seqs = [];
   for (let a = 1; a <= maxRank - 4; a++) seqs.push([a, a + 1, a + 2, a + 3, a + 4]);
-  // ラップ: (max-3 .. max, 1)。2 をまたぐラップは不可。
+  // 上端ラップ: (max-3 .. max, 1) と (max-2 .. max, 1, 2)。2 を超えるラップは不可。
   seqs.push([maxRank - 3, maxRank - 2, maxRank - 1, maxRank, 1]);
+  seqs.push([maxRank - 2, maxRank - 1, maxRank, 1, 2]);
   return seqs;
 }
 
@@ -271,7 +272,8 @@ export class GameState {
     return out;
   }
 
-  isTerminal() { return this.activePlayers().length <= 1; }
+  // 誰かが上がった時点でラウンド終了（即精算）
+  isTerminal() { return this.finished.length >= 1 || this.activePlayers().length <= 1; }
 
   clone() {
     const s = new GameState(this.cfg);

@@ -68,26 +68,45 @@ class AiRunner {
 export class GameController {
   /**
    * seats: 席ごとの {kind: "human"|"ai"|"remote", name}
+   * totalRounds: ラウンド数（累計チップで総合順位）
    * onUpdate(): 状態変化時に呼ばれる（ビューは view(seat) で取得）
    */
-  constructor(numPlayers, seats, onUpdate) {
+  constructor(numPlayers, seats, totalRounds, onUpdate) {
     this.cfg = standardConfig(numPlayers);
     this.seats = seats.map((s) => ({ ...s }));
+    this.totalRounds = Math.max(1, totalRounds | 0);
+    this.round = 1;
+    this.totals = new Array(numPlayers).fill(0);   // 累計チップ
     this.onUpdate = onUpdate || (() => {});
+    this.busy = false;             // AI進行中
+    this.ai = new AiRunner();
+    this._startRound();
+  }
+
+  _startRound() {
     this.state = GameState.deal(this.cfg);
     this.log = [];
     this.trick = [];               // 現在のトリック [{player, tiles}]
     this.scores = null;
-    this.busy = false;             // AI進行中
-    this.ai = new AiRunner();
     this.beliefs = new Map();      // seat -> BeliefState（AI席のみ）
-    for (let p = 0; p < numPlayers; p++) {
+    for (let p = 0; p < this.cfg.numPlayers; p++) {
       if (this.seats[p].kind === "ai") {
         this.beliefs.set(p, new BeliefState(this.cfg, p, this.state.hands[p]));
       }
     }
-    this._note(`ゲーム開始: ${numPlayers}人戦 / 数字1〜${this.cfg.maxRank} / 配牌${this.cfg.handSize}枚`);
+    this._note(`ラウンド ${this.round}/${this.totalRounds} 開始: `
+      + `${this.cfg.numPlayers}人戦 / 数字1〜${this.cfg.maxRank} / 配牌${this.cfg.handSize}枚`);
     this._note(`${this.names()[this.state.leader]} のリードから開始（☁3 保持者）`);
+  }
+
+  // 次のラウンドへ（終局後のみ）
+  nextRound() {
+    if (this.scores === null || this.round >= this.totalRounds) return false;
+    this.round++;
+    this._startRound();
+    this.onUpdate();
+    this.advance();
+    return true;
   }
 
   names() { return this.seats.map((s) => s.name); }
@@ -126,7 +145,8 @@ export class GameController {
     }
     if (this.state.isTerminal() && this.scores === null) {
       this.scores = roundScores(this.state);
-      this._note("ゲーム終了。スコアを精算します。", "info");
+      for (let i = 0; i < this.cfg.numPlayers; i++) this.totals[i] += this.scores[i];
+      this._note(`ラウンド ${this.round}/${this.totalRounds} 終了。スコアを精算します。`, "info");
     }
   }
 
@@ -219,11 +239,15 @@ export class GameController {
       yourTurn: myTurn,
       canPass: myTurn && st.current !== null,
       mustLead: myTurn && st.current === null,
+      round: this.round,
+      totalRounds: this.totalRounds,
+      matchOver: st.isTerminal() && this.round >= this.totalRounds,
       players: this.seats.map((s, i) => ({
         index: i, name: names[i], kind: s.kind,
         count: st.hands[i].length,
         isTurn: st.turn === i && !st.isTerminal(),
         isYou: i === seat,
+        passed: st.passed[i] && !st.finished.includes(i),
         finished: st.finished.includes(i),
       })),
       trickPlays: this.trick.map((e) => ({
@@ -238,6 +262,7 @@ export class GameController {
       scores: this.scores === null ? null : this.seats.map((_, i) => ({
         name: names[i],
         score: this.scores[i],
+        total: this.totals[i],
         count: st.hands[i].length,
         twos: st.hands[i].filter((t) => tileRank(t) === 2).length,
       })),

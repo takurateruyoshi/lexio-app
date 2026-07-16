@@ -26,6 +26,15 @@
           <option value="5">5人</option>
         </select>
       </label>
+      <label>ラウンド数
+        <select id="num-rounds">
+          <option value="1" selected>1ラウンド</option>
+          <option value="3">3ラウンド</option>
+          <option value="5">5ラウンド</option>
+          <option value="10">10ラウンド</option>
+        </select>
+      </label>
+      <button id="rules-btn-title" class="ghost">ルールを見る</button>
     </div>
     <div class="setup-row">
       <button id="solo-btn" class="primary">AIと対戦（ソロ）</button>
@@ -55,9 +64,15 @@
   <!-- ゲーム -->
   <section id="screen-game" class="hidden">
     <header class="topbar">
-      <label class="toggle"><input id="history-toggle" type="checkbox" checked>
-        過去に出た牌を表示</label>
-      <button id="leave-btn" class="ghost small">タイトルへ</button>
+      <div class="topbar-left">
+        <span id="round-indicator" class="round-indicator"></span>
+        <label class="toggle"><input id="history-toggle" type="checkbox" checked>
+          過去に出た牌を表示</label>
+      </div>
+      <div class="topbar-right">
+        <button id="rules-btn-game" class="ghost small">ルール</button>
+        <button id="leave-btn" class="ghost small">タイトルへ</button>
+      </div>
     </header>
 
     <div id="opponents" class="opponents"></div>
@@ -84,10 +99,42 @@
     </div>
   </section>
 
+  <!-- ルール -->
+  <div id="rules-overlay" class="overlay hidden">
+    <div class="result-card rules-card">
+      <h2>レキシオのルール</h2>
+      <div class="rules-body">
+        <h3>牌の強さ</h3>
+        <p><b>3</b> が最弱、<b>2</b> が最強:
+          3 &lt; 4 &lt; … &lt; 最大数字 &lt; <b>1</b> &lt; <b>2</b><br>
+          同じ数字はスートで決着: ☁雲 &lt; ★星 &lt; ☾月 &lt; ☀太陽</p>
+        <h3>役（同じ枚数同士でのみ勝負）</h3>
+        <p>単騎（1枚）／ ペア（同数字2枚）／ トリプル（同数字3枚）／ 5枚役</p>
+        <h3>5枚役の強さ（弱 → 強）</h3>
+        <p class="rank-order">
+          ストレート &lt; フラッシュ &lt; フルハウス &lt; フォーカード &lt; ストレートフラッシュ</p>
+        <p>ストレートは連番5つ。上端をまたぐ形（例: 6-7-8-9-<b>1</b>、7-8-9-<b>1</b>-<b>2</b>）も有効。
+          <b>2</b> を超えて 3 へは続きません。</p>
+        <h3>進行</h3>
+        <p>リーダーが好きな役を出し、以降は同じ枚数でより強い役を出すか「パス」。
+          全員がパスすると場が流れ、最後に出した人が次のリーダーになります。</p>
+        <h3>ラウンド終了と精算</h3>
+        <p><b>誰かが手札を出し切った瞬間</b>にラウンド終了。
+          全プレイヤーが互いに「残り枚数の差」をチップで支払います。
+          手札に残った <b>2</b> 一枚ごとに自分の支払い倍率が +1（2倍、3倍…）。</p>
+        <p>設定したラウンド数を繰り返し、累計チップで総合順位が決まります。</p>
+      </div>
+      <div class="setup-row center">
+        <button id="rules-close" class="primary">閉じる</button>
+      </div>
+    </div>
+  </div>
+
   <!-- リザルト -->
   <div id="result-overlay" class="overlay hidden">
     <div class="result-card">
       <h2 id="result-title">結果</h2>
+      <p id="result-round" class="result-round"></p>
       <table id="result-table"></table>
       <p class="result-note">チップは「残り枚数の差」を支払い、手札の<b>2</b>一枚ごとに
         支払い倍率が +1（2倍, 3倍…）になります。</p>

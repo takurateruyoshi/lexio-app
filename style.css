@@ -85,6 +85,8 @@ button.small{padding:6px 12px;font-size:12px}
 
 /* ============ トップバー ============ */
 .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px}
+.topbar-left,.topbar-right{display:flex;align-items:center;gap:12px}
+.round-indicator{font-size:13px;font-weight:700;color:var(--gold);letter-spacing:.08em}
 
 /* ============ 相手情報 ============ */
 .opponents{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
@@ -205,27 +207,47 @@ button.small{padding:6px 12px;font-size:12px}
 .tile.moon  .num,.tile.moon  .gly{color:var(--moon)}
 .tile.sun   .num,.tile.sun   .gly{color:var(--sun)}
 
-/* 卓上に寝かせた牌（3D: 面を倒し手前の厚みを見せる） */
+/* 卓上の牌（手牌と同じ層状シャドウの立体表現・変形なしで崩れない） */
 .tile.flat{
-  --w:46px;--h:62px;
-  transform:rotateX(32deg);transform-style:preserve-3d;
-  box-shadow:0 16px 16px rgba(0,0,0,.45);
+  --w:44px;--h:60px;
+  box-shadow:
+    inset 0 2px 2px rgba(255,255,255,.95),
+    inset 0 -2px 3px rgba(150,138,105,.45),
+    0 4px 0 -1px var(--tile-side),
+    0 7px 0 -1px var(--base2),
+    0 8px 0 -1px var(--base3),
+    0 11px 10px rgba(0,0,0,.45);
 }
-.tile.flat .num{font-size:22px}
-.tile.flat::before{ /* 手前の側面（象牙の厚み） */
-  content:"";position:absolute;left:-1px;right:-1px;bottom:-1px;height:11px;
-  border-radius:0 0 7px 7px;
-  background:linear-gradient(180deg,var(--ivory3) 0%,var(--tile-side) 55%,#a89a76 100%);
-  transform-origin:bottom;transform:rotateX(-90deg);
-}
+.tile.flat .num{font-size:21px}
 .seat-meld.live .tile{ /* 場を支配中のメルドを強調 */
-  box-shadow:0 0 0 2px var(--gold),0 0 22px rgba(233,196,106,.5),
-    0 16px 16px rgba(0,0,0,.45);
+  box-shadow:
+    inset 0 2px 2px rgba(255,255,255,.95),
+    inset 0 -2px 3px rgba(150,138,105,.45),
+    0 4px 0 -1px var(--tile-side),
+    0 7px 0 -1px var(--base2),
+    0 8px 0 -1px var(--base3),
+    0 0 0 2px var(--gold),
+    0 0 22px rgba(233,196,106,.5),
+    0 11px 10px rgba(0,0,0,.45);
 }
 .tile.mini{--w:28px;--h:38px;border-radius:4px}
-.tile.mini .num{font-size:14px}
+.tile.mini .num{font-size:14px !important}
 .tile.mini .gly{font-size:8px;margin-top:1px}
-.tile.mini.flat::before{height:6px}
+.tile.mini.flat{
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,.9),
+    inset 0 -1px 2px rgba(150,138,105,.4),
+    0 3px 0 -1px var(--tile-side),
+    0 5px 0 -1px var(--base3),
+    0 7px 6px rgba(0,0,0,.4);
+}
+
+/* パス表示チップ */
+.pass-chip{
+  font-size:12px;font-weight:700;color:rgba(255,255,255,.85);
+  background:rgba(0,0,0,.5);border:1px solid var(--line2);
+  border-radius:12px;padding:4px 12px;letter-spacing:.15em;
+}
 
 /* ============ 手札（雀魂風: 隙間なく並ぶ大きな牌） ============ */
 .myhand-wrap{
@@ -276,6 +298,14 @@ button.small{padding:6px 12px;font-size:12px}
   box-shadow:0 24px 70px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.1);
 }
 .result-card h2{margin:0 0 18px;color:var(--gold);letter-spacing:.05em}
+.result-round{font-size:12px;color:var(--muted);margin:-10px 0 14px}
+
+/* ルールモーダル */
+.rules-card{max-width:600px;text-align:left;max-height:86vh;overflow-y:auto}
+.rules-card h2{text-align:center}
+.rules-body h3{font-size:14px;color:var(--gold);margin:16px 0 6px;letter-spacing:.06em}
+.rules-body p{font-size:13px;color:var(--text);line-height:1.8;margin:0 0 4px}
+.rules-body .rank-order{font-weight:700}
 #result-table{width:100%;border-collapse:collapse;margin-bottom:16px}
 #result-table th,#result-table td{padding:10px 8px;border-bottom:1px solid var(--line);
   font-size:14px;text-align:right}

@@ -93,6 +93,13 @@ function renderTable(view, showHistory) {
       if (view.currentMeld && view.lastPlayerSeat === p.index) mv.classList.add("live");
       for (const t of latest.tiles) mv.appendChild(tileEl(t, "flat", false));
     }
+    // このトリックでパス済みのプレイヤーには「パス」を表示
+    if (p.passed && view.currentMeld) {
+      const pc = document.createElement("div");
+      pc.className = "pass-chip";
+      pc.textContent = "パス";
+      mv.appendChild(pc);
+    }
     seat.appendChild(mv);
     tb.appendChild(seat);
   }
@@ -108,6 +115,10 @@ function renderTable(view, showHistory) {
 // handlers: {onToggle, }  opts: {showHistory}
 export function renderGame(view, opts = {}) {
   clearSelection();
+
+  $("round-indicator").textContent =
+    view.totalRounds > 1 ? `ラウンド ${view.round} / ${view.totalRounds}` : "";
+  if (!view.terminal) $("result-overlay").classList.add("hidden");
 
   // 相手情報ストリップ（AIの直近思考つき）
   const wrap = $("opponents");
@@ -177,17 +188,29 @@ export function renderGame(view, opts = {}) {
 }
 
 export function showResult(view) {
+  const multi = view.totalRounds > 1;
   const tbl = $("result-table");
-  tbl.innerHTML = `<tr><th>プレイヤー</th><th>残り</th><th>2の数</th><th>収支</th></tr>`;
-  const sorted = [...view.scores].sort((a, b) => b.score - a.score);
+  tbl.innerHTML = `<tr><th>プレイヤー</th><th>残り</th><th>2の数</th><th>今回</th>${multi ? "<th>累計</th>" : ""}</tr>`;
+  const sortKey = view.matchOver && multi ? "total" : "score";
+  const sorted = [...view.scores].sort((a, b) => b[sortKey] - a[sortKey]);
   for (const s of sorted) {
-    const cls = s.score > 0 ? "pos" : (s.score < 0 ? "neg" : "");
+    const fmt = (v) => `${v > 0 ? "+" : ""}${v.toFixed(0)}`;
+    const cls = (v) => (v > 0 ? "pos" : (v < 0 ? "neg" : ""));
     const win = s.name === view.winner ? "win" : "";
     tbl.innerHTML += `<tr class="${win}"><td>${s.name}${win ? " 👑" : ""}</td>
       <td>${s.count}</td><td>${s.twos}</td>
-      <td class="${cls}">${s.score > 0 ? "+" : ""}${s.score.toFixed(0)}</td></tr>`;
+      <td class="${cls(s.score)}">${fmt(s.score)}</td>
+      ${multi ? `<td class="${cls(s.total)}">${fmt(s.total)}</td>` : ""}</tr>`;
   }
-  $("result-title").textContent = view.winner ? `🏁 ${view.winner} の勝ち！` : "ゲーム終了";
+  if (view.matchOver && multi) {
+    const champ = sorted[0];
+    $("result-title").textContent = `🏆 総合優勝: ${champ.name}`;
+    $("result-round").textContent = `全 ${view.totalRounds} ラウンド終了（このラウンドの上がり: ${view.winner}）`;
+  } else {
+    $("result-title").textContent = view.winner ? `🏁 ${view.winner} の勝ち！` : "ラウンド終了";
+    $("result-round").textContent = multi ? `ラウンド ${view.round} / ${view.totalRounds}` : "";
+  }
+  $("result-again").textContent = view.matchOver ? "もう一局" : "次のラウンドへ";
   $("result-overlay").classList.remove("hidden");
 }
 

@@ -25,9 +25,10 @@ export class HostSession {
   /**
    * cb: {onReady(code), onLobby(seats), onState(view), onError(msg), onLog(msg)}
    */
-  constructor(hostName, tableSize, cb) {
+  constructor(hostName, tableSize, rounds, cb) {
     this.hostName = hostName;
     this.tableSize = tableSize;
+    this.rounds = rounds;
     this.cb = cb;
     this.code = randomCode();
     this.conns = new Map();     // seat -> DataConnection
@@ -117,10 +118,17 @@ export class HostSession {
       else seats.push({ kind: "ai", name: `AI-${s}` });
     }
     this.inGame = true;
-    this.controller = new GameController(this.tableSize, seats, () => this._pushStates());
+    this.controller = new GameController(this.tableSize, seats, this.rounds,
+                                         () => this._pushStates());
     for (const [seat, conn] of this.conns) conn.send({ t: "start", yourSeat: seat });
     this._pushStates();
     this.controller.advance();
+  }
+
+  // 終局後: 残ラウンドがあれば次ラウンド、無ければ同設定で新しいマッチ
+  advanceMatch() {
+    if (!this.controller) return;
+    if (!this.controller.nextRound()) this.rematch();
   }
 
   _pushStates() {
@@ -139,7 +147,7 @@ export class HostSession {
     if (!this.inGame) return;
     const names = this.controller.seats;
     this.controller = new GameController(this.tableSize, names.map((s) => ({ ...s })),
-                                         () => this._pushStates());
+                                         this.rounds, () => this._pushStates());
     for (const [seat, conn] of this.conns) conn.send({ t: "start", yourSeat: seat });
     this._pushStates();
     this.controller.advance();

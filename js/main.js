@@ -8,6 +8,7 @@ let session = null;      // {mode:'solo'|'host'|'guest', ...}
 let lastView = null;
 
 const playerName = () => ($("player-name").value.trim() || "あなた");
+const numRounds = () => parseInt($("num-rounds").value, 10);
 const showHistory = () => $("history-toggle").checked;
 
 function rerender() {
@@ -17,6 +18,8 @@ function rerender() {
 function onViewUpdate(view) {
   lastView = view;
   renderGame(view, { showHistory: showHistory() });
+  // ゲストは次ラウンド/再戦をホスト任せにする
+  $("result-again").classList.toggle("hidden", session && session.mode === "guest");
 }
 
 function leaveSession() {
@@ -35,7 +38,7 @@ function startSolo() {
   const n = parseInt($("num-players").value, 10);
   const seats = [{ kind: "human", name: playerName() }];
   for (let i = 1; i < n; i++) seats.push({ kind: "ai", name: `AI-${i}` });
-  const ctrl = new GameController(n, seats, () => onViewUpdate(ctrl.view(0)));
+  const ctrl = new GameController(n, seats, numRounds(), () => onViewUpdate(ctrl.view(0)));
   session = { mode: "solo", ctrl };
   showScreen("game");
   onViewUpdate(ctrl.view(0));
@@ -46,7 +49,7 @@ function startSolo() {
 function createRoom() {
   const n = parseInt($("num-players").value, 10);
   $("title-hint").textContent = "接続サーバーに接続中...";
-  const host = new HostSession(playerName(), n, {
+  const host = new HostSession(playerName(), n, numRounds(), {
     onReady: (code) => {
       $("title-hint").textContent = "";
       showScreen("lobby");
@@ -136,9 +139,13 @@ function doPass() {
 function rematch() {
   $("result-overlay").classList.add("hidden");
   if (!session) return;
-  if (session.mode === "solo") startSolo();
-  else if (session.mode === "host") session.host.rematch();
-  // guest はホストの再開を待つ
+  if (session.mode === "solo") {
+    // 残ラウンドがあれば次ラウンド、無ければ新しいマッチ
+    if (!session.ctrl.nextRound()) startSolo();
+  } else if (session.mode === "host") {
+    session.host.advanceMatch();
+  }
+  // guest はホストの進行を待つ
 }
 
 // ---- 配線 ----
@@ -161,4 +168,8 @@ window.addEventListener("DOMContentLoaded", () => {
   $("history-toggle").addEventListener("change", rerender);
   $("result-again").addEventListener("click", rematch);
   $("result-title-btn").addEventListener("click", leaveSession);
+  const openRules = () => $("rules-overlay").classList.remove("hidden");
+  $("rules-btn-title").addEventListener("click", openRules);
+  $("rules-btn-game").addEventListener("click", openRules);
+  $("rules-close").addEventListener("click", () => $("rules-overlay").classList.add("hidden"));
 });

@@ -133,8 +133,9 @@ def _straight_sequences(max_rank: int) -> List[List[int]]:
     # 自然な連番 a..a+4 (1..max)。1-2-3-4-5 や 2-3-4-5-6 を含む。
     for a in range(1, max_rank - 3):
         seqs.append([a, a + 1, a + 2, a + 3, a + 4])
-    # ラップ: (max-3, max-2, max-1, max, 1)  ※ 2 をまたぐラップは不可
+    # 上端ラップ: (max-3..max, 1) と (max-2..max, 1, 2)  ※ 2 を超えるラップは不可
     seqs.append([max_rank - 3, max_rank - 2, max_rank - 1, max_rank, 1])
+    seqs.append([max_rank - 2, max_rank - 1, max_rank, 1, 2])
     return seqs
 
 
@@ -362,8 +363,8 @@ class GameState:
         return [i for i in range(self.cfg.num_players) if self.hands[i]]
 
     def is_terminal(self) -> bool:
-        # 上がっていないプレイヤーが 1 人以下になったらラウンド終了
-        return len(self.active_players()) <= 1
+        # 誰かが上がった時点でラウンド終了(即精算)
+        return len(self.finished) >= 1 or len(self.active_players()) <= 1
 
     def clone(self) -> "GameState":
         s = GameState(self.cfg, [list(h) for h in self.hands], list(self.hidden),
