@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>レキシオ — CFR/ベイズ AI 対戦</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- 開始画面 -->
+  <section id="setup" class="panel">
+    <h1>レキシオ <span class="sub">CFR × ベイズ AI 対戦</span></h1>
+    <p class="lead">麻雀×ポーカー×大富豪。あなた以外は学習済みAI。各配牌の
+      <b>最強手プレイヤー</b>を、残りのAIが<b>連携して抑え込みます</b>。
+      あなたが狙われることも。</p>
+    <div class="setup-row">
+      <label>プレイヤー名
+        <input id="human-name" type="text" value="あなた" maxlength="20">
+      </label>
+      <label>人数
+        <select id="num-players">
+          <option value="2">2人</option>
+          <option value="3" selected>3人</option>
+          <option value="4">4人</option>
+          <option value="5">5人</option>
+        </select>
+      </label>
+      <label>過去に出た牌
+        <select id="show-history">
+          <option value="on" selected>卓に表示する</option>
+          <option value="off">表示しない</option>
+        </select>
+      </label>
+      <button id="start-btn" class="primary">ゲーム開始</button>
+    </div>
+    <p class="hint" id="setup-hint"></p>
+  </section>
+
+  <!-- ゲーム画面 -->
+  <section id="game" class="hidden">
+    <header class="topbar">
+      <div class="board-info">
+        <span id="target-banner" class="banner"></span>
+      </div>
+      <button id="restart-btn" class="ghost">新しいゲーム</button>
+    </header>
+
+    <!-- 対戦相手 -->
+    <div id="opponents" class="opponents"></div>
+
+    <!-- 卓 -->
+    <div class="board">
+      <div id="table3d" class="table3d"></div>
+      <div id="board-meta" class="board-meta"></div>
+    </div>
+
+    <!-- 自分の手番情報 -->
+    <div id="turn-indicator" class="turn-indicator"></div>
+
+    <!-- 手札 -->
+    <div class="myhand-wrap">
+      <div class="myhand-label" id="myhand-label">あなたの手札（クリックで選択）</div>
+      <div id="my-hand" class="my-hand"></div>
+      <div class="actions">
+        <button id="play-btn" class="primary" disabled>選択したタイルを出す</button>
+        <button id="pass-btn" class="ghost" disabled>パス</button>
+        <span id="action-msg" class="action-msg"></span>
+      </div>
+    </div>
+
+    <!-- ログ + AI思考 -->
+    <div class="loglane">
+      <div class="log-title">プレイ履歴 / AIの思考</div>
+      <div id="log" class="log"></div>
+    </div>
+  </section>
+
+  <!-- リザルト -->
+  <div id="result-overlay" class="overlay hidden">
+    <div class="result-card">
+      <h2 id="result-title">結果</h2>
+      <table id="result-table"></table>
+      <p class="result-note">チップは「残り枚数の差」を支払い、手札の<b>2</b>一枚ごとに
+        支払い倍率が +1（2倍, 3倍…）になります。</p>
+      <button id="result-again" class="primary">もう一度</button>
+    </div>
+  </div>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>

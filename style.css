@@ -1,0 +1,302 @@
+:root{
+  /* 全体トーン: 暗色フェルト卓 × 象牙牌 */
+  --bg1:#101b17; --bg2:#0a1210;
+  --felt1:#2c6e54; --felt2:#17493a; --felt3:#0c2f24;
+  --panel:rgba(12,26,21,.80); --panel2:rgba(20,40,32,.86);
+  --line:rgba(255,255,255,.10); --line2:rgba(255,255,255,.18);
+  --text:#eef4ef; --muted:#9db5a8;
+  --gold:#e9c46a; --gold2:#c99b2e;
+  --accent:#57c7ff;
+  /* スート色（牌の刻印色） */
+  --cloud:#2f6fc4; --star:#c08a12; --moon:#1d8f56; --sun:#c93a28;
+  /* 牌の素材（象牙） */
+  --ivory1:#fffef8; --ivory2:#f5f0e0; --ivory3:#e0d8c0;
+  --tile-side:#cfc6a8;
+  --base1:#2e9070; --base2:#1d6b51; --base3:#124736;  /* 牌の色付き土台 */
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;color:var(--text);
+  font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Segoe UI",system-ui,sans-serif;
+  background:
+    radial-gradient(1100px 650px at 50% -8%, #1a2b23 0%, transparent 60%),
+    linear-gradient(170deg,var(--bg1),var(--bg2));
+  min-height:100vh;
+}
+#app{max-width:1080px;margin:0 auto;padding:18px}
+.hidden{display:none !important}
+
+h1{font-size:26px;margin:0 0 4px;letter-spacing:.04em;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+h1 .sub{font-size:14px;color:var(--gold);font-weight:500}
+.lead{color:var(--muted);line-height:1.7;font-size:14px}
+.lead b{color:var(--text)}
+
+/* ============ パネル / フォーム ============ */
+.panel{
+  background:linear-gradient(175deg,rgba(30,54,44,.92),rgba(13,26,21,.95));
+  border:1px solid var(--line2);border-radius:16px;
+  padding:26px 28px;box-shadow:0 14px 44px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.setup-row{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-top:16px}
+.setup-row.center{justify-content:center}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:6px}
+label.toggle{flex-direction:row;align-items:center;gap:7px;font-size:13px;cursor:pointer}
+input,select{
+  background:rgba(0,0,0,.32);border:1px solid var(--line2);color:var(--text);
+  border-radius:9px;padding:10px 12px;font-size:15px;min-width:120px;outline:none;
+}
+input:focus,select:focus{border-color:var(--gold)}
+.join-group{display:flex;gap:8px;align-items:center}
+.join-group input{min-width:110px;width:130px;text-transform:uppercase;letter-spacing:.15em}
+button{cursor:pointer;border:none;border-radius:10px;padding:11px 20px;font-size:14px;
+  font-weight:700;transition:.15s;letter-spacing:.03em}
+button:disabled{opacity:.38;cursor:not-allowed}
+button.small{padding:6px 12px;font-size:12px}
+.primary{
+  background:linear-gradient(175deg,#f2d488,var(--gold) 45%,var(--gold2));
+  color:#3a2a06;box-shadow:0 3px 0 #8a691c,0 6px 14px rgba(0,0,0,.4);
+}
+.primary.alt{
+  background:linear-gradient(175deg,#8fd8b8,#3fae7e 45%,#2b7d59);
+  color:#03261a;box-shadow:0 3px 0 #1c5942,0 6px 14px rgba(0,0,0,.4);
+}
+.primary:hover:not(:disabled){filter:brightness(1.08);transform:translateY(-1px)}
+.primary:active:not(:disabled){transform:translateY(1px);box-shadow:0 1px 0 #8a691c}
+.ghost{background:rgba(255,255,255,.06);color:var(--text);border:1px solid var(--line2)}
+.ghost:hover:not(:disabled){background:rgba(255,255,255,.12)}
+.hint{color:var(--muted);font-size:12px;margin-top:10px;min-height:16px}
+
+/* ============ ロビー ============ */
+.room-code{
+  font-size:30px;font-weight:800;letter-spacing:.3em;color:var(--gold);
+  background:rgba(0,0,0,.35);border:1px dashed var(--gold2);border-radius:10px;
+  padding:4px 14px 4px 20px;
+}
+.lobby-seats{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+.lobby-seat{
+  background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+  padding:10px 14px;font-size:14px;display:flex;gap:10px;align-items:center;
+}
+.lobby-seat .seat-no{color:var(--muted);font-size:12px}
+.lobby-seat .k{margin-left:auto;font-size:12px;color:var(--muted)}
+.lobby-seat.human{border-color:var(--gold)}
+.lobby-seat.remote{border-color:var(--accent)}
+
+/* ============ トップバー ============ */
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px}
+
+/* ============ 相手情報 ============ */
+.opponents{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.opp{
+  background:var(--panel);border:1px solid var(--line);border-radius:13px;
+  padding:11px 14px;min-width:150px;flex:1;transition:.25s;
+  box-shadow:0 6px 18px rgba(0,0,0,.3);
+}
+.opp.turn{border-color:var(--gold);
+  box-shadow:0 0 0 2px rgba(233,196,106,.4),0 0 24px rgba(233,196,106,.22)}
+.opp.finished{opacity:.45;filter:grayscale(.6)}
+.opp .oname{font-weight:700;font-size:15px;display:flex;align-items:center;gap:7px}
+.opp .ocount{font-size:12px;color:var(--muted);margin-top:3px}
+.tag{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700}
+.tag.ai{background:linear-gradient(175deg,#63c0f0,#2f7fb8);color:#04202f}
+.tag.human{background:linear-gradient(175deg,#f2d488,var(--gold2));color:#3a2a06}
+.thought{margin-top:8px;font-size:11px;color:var(--muted);line-height:1.5;
+  background:rgba(0,0,0,.3);border-radius:8px;padding:5px 9px;border:1px dashed var(--line2)}
+.thought b,.log .th b{color:var(--accent)}
+
+/* 相手の牌（裏向き） */
+.tile-back-row{display:flex;gap:3px;margin-top:8px;flex-wrap:wrap;padding-bottom:4px}
+.tile-back{
+  width:14px;height:20px;border-radius:3px;
+  background:linear-gradient(170deg,var(--base1) 0%,var(--base2) 70%,var(--base3) 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,.45),
+    inset 0 -1px 1px rgba(0,0,0,.35),
+    0 3px 0 -1px var(--base3),
+    0 4px 4px rgba(0,0,0,.45);
+}
+
+/* ============ 卓（フェルト） ============ */
+.board{
+  position:relative;border-radius:20px;margin-bottom:14px;
+  background:
+    radial-gradient(130% 150% at 50% 20%, var(--felt1) 0%, var(--felt2) 52%, var(--felt3) 100%);
+  border:1px solid rgba(255,255,255,.14);
+  box-shadow:
+    inset 0 2px 16px rgba(255,255,255,.07),
+    inset 0 -16px 40px rgba(0,0,0,.5),
+    0 12px 34px rgba(0,0,0,.45);
+  padding:10px 12px 6px;
+}
+.table3d{
+  position:relative;height:460px;perspective:1050px;perspective-origin:50% 30%;
+}
+.table3d.n2,.table3d.n3{height:400px}
+
+/* 席 */
+.seat{position:absolute;display:flex;flex-direction:column;align-items:center;gap:8px;
+  max-width:46%}
+.pos-b {bottom:10px;left:50%;transform:translateX(-50%);flex-direction:column-reverse}
+.pos-t {top:12px;  left:50%;transform:translateX(-50%)}
+.pos-l {left:14px; top:50%; transform:translateY(-50%)}
+.pos-r {right:14px;top:50%; transform:translateY(-50%)}
+.pos-tl{top:12px;left:6%}
+.pos-tr{top:12px;right:6%}
+.pos-l,.pos-r{max-width:30%}
+
+.seat-name{font-size:11px;color:rgba(255,255,255,.85);letter-spacing:.06em;
+  background:rgba(0,0,0,.42);padding:3px 12px;border-radius:11px;
+  border:1px solid var(--line2);white-space:nowrap}
+.seat.turn .seat-name{color:var(--gold);border-color:var(--gold);
+  box-shadow:0 0 12px rgba(233,196,106,.45)}
+.seat.finished{opacity:.55}
+
+.seat-meld{display:flex;gap:7px;min-height:64px;align-items:center;justify-content:center}
+.seat-hist{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;
+  opacity:.55;max-width:300px}
+.pos-l .seat-hist,.pos-r .seat-hist{max-width:170px}
+.hist-meld{display:flex;gap:2px}
+
+.table-center{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  text-align:center;pointer-events:none;
+  display:flex;flex-direction:column;gap:2px;align-items:center;
+}
+.table-center b{font-size:15px;color:var(--gold);letter-spacing:.12em;
+  text-shadow:0 1px 6px rgba(0,0,0,.6)}
+.table-center span{font-size:11px;color:rgba(255,255,255,.6);letter-spacing:.1em}
+
+/* ============ ターン表示 ============ */
+.turn-indicator{text-align:center;font-size:15px;margin:4px 0 12px;min-height:24px}
+.turn-indicator.you{color:var(--gold);font-weight:700;
+  text-shadow:0 0 14px rgba(233,196,106,.55);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.65}}
+
+/* ============ 牌（象牙・雀魂風の立体） ============ */
+.tile{
+  --w:54px; --h:74px;
+  width:var(--w);height:var(--h);border-radius:7px;position:relative;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  user-select:none;
+  background:linear-gradient(168deg,var(--ivory1) 0%,var(--ivory2) 62%,var(--ivory3) 100%);
+  box-shadow:
+    inset 0 2px 2px rgba(255,255,255,.95),
+    inset 0 -2px 3px rgba(150,138,105,.45),
+    inset 2px 0 2px rgba(255,255,255,.4),
+    inset -2px 0 3px rgba(150,138,105,.25),
+    0 5px 0 -1px var(--tile-side),          /* 象牙の側面 */
+    0 9px 0 -1px var(--base2),               /* 色付きの土台 */
+    0 10px 0 -1px var(--base3),
+    0 14px 12px rgba(0,0,0,.5);              /* 落ち影 */
+}
+.tile::after{ /* 面のツヤ */
+  content:"";position:absolute;inset:0;border-radius:7px;pointer-events:none;
+  background:linear-gradient(115deg,rgba(255,255,255,.55) 0%,transparent 32%);
+}
+.tile .num{
+  font-size:27px;line-height:1;font-weight:800;
+  text-shadow:0 1px 0 rgba(255,255,255,.85), 0 -1px 1px rgba(0,0,0,.28); /* 刻印風 */
+}
+.tile .gly{font-size:13px;line-height:1;margin-top:2px;
+  text-shadow:0 1px 0 rgba(255,255,255,.8), 0 -1px 1px rgba(0,0,0,.22)}
+.tile.cloud .num,.tile.cloud .gly{color:var(--cloud)}
+.tile.star  .num,.tile.star  .gly{color:var(--star)}
+.tile.moon  .num,.tile.moon  .gly{color:var(--moon)}
+.tile.sun   .num,.tile.sun   .gly{color:var(--sun)}
+
+/* 卓上に寝かせた牌（3D: 面を倒し手前の厚みを見せる） */
+.tile.flat{
+  --w:46px;--h:62px;
+  transform:rotateX(32deg);transform-style:preserve-3d;
+  box-shadow:0 16px 16px rgba(0,0,0,.45);
+}
+.tile.flat .num{font-size:22px}
+.tile.flat::before{ /* 手前の側面（象牙の厚み） */
+  content:"";position:absolute;left:-1px;right:-1px;bottom:-1px;height:11px;
+  border-radius:0 0 7px 7px;
+  background:linear-gradient(180deg,var(--ivory3) 0%,var(--tile-side) 55%,#a89a76 100%);
+  transform-origin:bottom;transform:rotateX(-90deg);
+}
+.seat-meld.live .tile{ /* 場を支配中のメルドを強調 */
+  box-shadow:0 0 0 2px var(--gold),0 0 22px rgba(233,196,106,.5),
+    0 16px 16px rgba(0,0,0,.45);
+}
+.tile.mini{--w:28px;--h:38px;border-radius:4px}
+.tile.mini .num{font-size:14px}
+.tile.mini .gly{font-size:8px;margin-top:1px}
+.tile.mini.flat::before{height:6px}
+
+/* ============ 手札（雀魂風: 隙間なく並ぶ大きな牌） ============ */
+.myhand-wrap{
+  background:linear-gradient(175deg,rgba(26,48,39,.92),rgba(12,25,20,.95));
+  border:1px solid var(--line2);border-radius:15px;
+  padding:20px 18px 14px;margin-bottom:12px;
+  box-shadow:0 8px 24px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.07);
+}
+.my-hand{display:flex;gap:2px;flex-wrap:wrap;min-height:96px;padding:16px 2px 14px;
+  align-items:flex-end;justify-content:center;perspective:900px}
+.my-hand .tile{cursor:pointer;transition:transform .13s ease,filter .13s;
+  transform:rotateX(8deg);border-radius:6px 6px 4px 4px}
+.my-hand .tile:hover{transform:rotateX(8deg) translateY(-8px);filter:brightness(1.05)}
+.my-hand .tile.selected{
+  transform:rotateX(8deg) translateY(-16px);
+  box-shadow:
+    inset 0 2px 2px rgba(255,255,255,.95),
+    inset 0 -2px 3px rgba(150,138,105,.45),
+    0 5px 0 -1px var(--tile-side),
+    0 9px 0 -1px var(--gold2),
+    0 10px 0 -1px #8a691c,
+    0 0 0 2px var(--gold),
+    0 0 22px rgba(233,196,106,.6),
+    0 18px 14px rgba(0,0,0,.5);
+}
+.actions{display:flex;gap:12px;align-items:center;margin-top:8px}
+.action-msg{font-size:13px;color:#ff9a8f}
+
+/* ============ ログ ============ */
+.loglane{background:var(--panel);border:1px solid var(--line);border-radius:13px;
+  padding:14px;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.log-title{font-size:12px;color:var(--muted);margin-bottom:8px;letter-spacing:.08em}
+.log{max-height:200px;overflow-y:auto;font-size:13px;display:flex;
+  flex-direction:column;gap:5px}
+.log .row{padding:6px 10px;border-radius:8px;background:rgba(0,0,0,.28);line-height:1.5}
+.log .row.play{border-left:3px solid var(--accent)}
+.log .row.pass{border-left:3px solid #5a6d64}
+.log .row.finish{border-left:3px solid var(--gold);color:var(--gold)}
+.log .row .th,.thought .th{color:var(--muted);font-size:11px;margin-top:3px}
+
+/* ============ リザルト ============ */
+.overlay{position:fixed;inset:0;background:rgba(2,8,6,.82);display:flex;
+  align-items:center;justify-content:center;z-index:50;backdrop-filter:blur(3px)}
+.result-card{
+  background:linear-gradient(175deg,#20392e,#0e1e17);
+  border:1px solid var(--gold2);border-radius:18px;
+  padding:28px 32px;max-width:540px;width:92%;text-align:center;
+  box-shadow:0 24px 70px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.1);
+}
+.result-card h2{margin:0 0 18px;color:var(--gold);letter-spacing:.05em}
+#result-table{width:100%;border-collapse:collapse;margin-bottom:16px}
+#result-table th,#result-table td{padding:10px 8px;border-bottom:1px solid var(--line);
+  font-size:14px;text-align:right}
+#result-table th{color:var(--muted);font-weight:600}
+#result-table th:first-child,#result-table td:first-child{text-align:left}
+#result-table tr.win td{color:var(--gold);font-weight:700}
+.pos{color:#5cd08a}.neg{color:#ff8a7d}
+.result-note{font-size:11px;color:var(--muted);line-height:1.7}
+
+.board-meta{font-size:12px;color:rgba(255,255,255,.65);text-align:center;
+  padding:6px 0 8px;min-height:16px}
+.board-meta b{color:var(--gold)}
+
+@media (max-width:640px){
+  .table3d{height:400px}
+  .table3d.n2,.table3d.n3{height:360px}
+  .tile{--w:44px;--h:60px}
+  .tile .num{font-size:21px}
+  .tile.flat{--w:38px;--h:52px}
+  .tile.mini{--w:22px;--h:30px}
+  .tile.mini .num{font-size:11px}
+  .seat-hist{max-width:180px}
+  .pos-l .seat-hist,.pos-r .seat-hist{max-width:100px}
+}

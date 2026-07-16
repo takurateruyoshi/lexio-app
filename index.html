@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>レキシオ — オンライン対戦</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- タイトル / セットアップ -->
+  <section id="screen-title" class="panel">
+    <h1>レキシオ <span class="sub">オンライン P2P 対戦</span></h1>
+    <p class="lead">麻雀×ポーカー×大富豪。AIと遊ぶもよし、部屋を作って友達と対戦するもよし。
+      空席にはベイズ推定AIが入ります。</p>
+    <div class="setup-row">
+      <label>プレイヤー名
+        <input id="player-name" type="text" value="あなた" maxlength="20">
+      </label>
+      <label>人数（卓の大きさ）
+        <select id="num-players">
+          <option value="2">2人</option>
+          <option value="3" selected>3人</option>
+          <option value="4">4人</option>
+          <option value="5">5人</option>
+        </select>
+      </label>
+    </div>
+    <div class="setup-row">
+      <button id="solo-btn" class="primary">AIと対戦（ソロ）</button>
+      <button id="create-room-btn" class="primary alt">部屋を作る</button>
+      <span class="join-group">
+        <input id="join-code" type="text" placeholder="部屋コード" maxlength="6">
+        <button id="join-room-btn" class="ghost">参加する</button>
+      </span>
+    </div>
+    <p class="hint" id="title-hint"></p>
+    <p class="hint">※ オンライン対戦はP2P接続です。同じWi-Fi内なら確実につながります。</p>
+  </section>
+
+  <!-- ロビー -->
+  <section id="screen-lobby" class="panel hidden">
+    <h1>部屋コード <span id="room-code" class="room-code">-----</span>
+      <button id="copy-code-btn" class="ghost small">コピー</button></h1>
+    <p class="lead">このコードを友達に伝えてください。参加者はタイトル画面の「参加する」から入れます。</p>
+    <div id="lobby-seats" class="lobby-seats"></div>
+    <p class="hint" id="lobby-status"></p>
+    <div class="setup-row">
+      <button id="start-room-btn" class="primary">空席はAIで埋めて開始</button>
+      <button id="lobby-leave-btn" class="ghost">退出</button>
+    </div>
+  </section>
+
+  <!-- ゲーム -->
+  <section id="screen-game" class="hidden">
+    <header class="topbar">
+      <label class="toggle"><input id="history-toggle" type="checkbox" checked>
+        過去に出た牌を表示</label>
+      <button id="leave-btn" class="ghost small">タイトルへ</button>
+    </header>
+
+    <div id="opponents" class="opponents"></div>
+
+    <div class="board">
+      <div id="table3d" class="table3d"></div>
+      <div id="board-meta" class="board-meta"></div>
+    </div>
+
+    <div id="turn-indicator" class="turn-indicator"></div>
+
+    <div class="myhand-wrap">
+      <div id="my-hand" class="my-hand"></div>
+      <div class="actions">
+        <button id="play-btn" class="primary" disabled>選択したタイルを出す</button>
+        <button id="pass-btn" class="ghost" disabled>パス</button>
+        <span id="action-msg" class="action-msg"></span>
+      </div>
+    </div>
+
+    <div class="loglane">
+      <div class="log-title">プレイ履歴 / AIの読み</div>
+      <div id="log" class="log"></div>
+    </div>
+  </section>
+
+  <!-- リザルト -->
+  <div id="result-overlay" class="overlay hidden">
+    <div class="result-card">
+      <h2 id="result-title">結果</h2>
+      <table id="result-table"></table>
+      <p class="result-note">チップは「残り枚数の差」を支払い、手札の<b>2</b>一枚ごとに
+        支払い倍率が +1（2倍, 3倍…）になります。</p>
+      <div class="setup-row center">
+        <button id="result-again" class="primary">もう一局</button>
+        <button id="result-title-btn" class="ghost">タイトルへ</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script src="vendor/peerjs.min.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
