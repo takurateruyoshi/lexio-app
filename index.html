@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>レキシオ — オンライン対戦</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -26,17 +26,13 @@
           <option value="5">5人</option>
         </select>
       </label>
-      <label>ラウンド数
-        <select id="num-rounds">
-          <option value="1" selected>1ラウンド</option>
-          <option value="3">3ラウンド</option>
-          <option value="5">5ラウンド</option>
-          <option value="10">10ラウンド</option>
-        </select>
+      <label>ラウンド数（1〜99）
+        <input id="num-rounds" type="number" min="1" max="99" value="3">
       </label>
       <button id="rules-btn-title" class="ghost">ルールを見る</button>
     </div>
     <div class="setup-row">
+      <button id="resume-btn" class="primary alt hidden">⏸ 続きから再開</button>
       <button id="solo-btn" class="primary">AIと対戦（ソロ）</button>
       <button id="create-room-btn" class="primary alt">部屋を作る</button>
       <span class="join-group">
@@ -45,7 +41,8 @@
       </span>
     </div>
     <p class="hint" id="title-hint"></p>
-    <p class="hint">※ オンライン対戦はP2P接続です。同じWi-Fi内なら確実につながります。</p>
+    <p class="hint">※ オンライン対戦はP2P接続です。同じWi-Fi内なら確実につながります。
+      リロードしても自動で復帰できます。</p>
   </section>
 
   <!-- ロビー -->
@@ -61,41 +58,52 @@
     </div>
   </section>
 
-  <!-- ゲーム -->
+  <!-- ゲーム（全画面ステージ） -->
   <section id="screen-game" class="hidden">
-    <header class="topbar">
-      <div class="topbar-left">
-        <span id="round-indicator" class="round-indicator"></span>
-        <label class="toggle"><input id="history-toggle" type="checkbox" checked>
-          過去に出た牌を表示</label>
-      </div>
-      <div class="topbar-right">
-        <button id="rules-btn-game" class="ghost small">ルール</button>
-        <button id="leave-btn" class="ghost small">タイトルへ</button>
-      </div>
-    </header>
-
-    <div id="opponents" class="opponents"></div>
-
-    <div class="board">
+    <div id="game-stage">
       <div id="table3d" class="table3d"></div>
-      <div id="board-meta" class="board-meta"></div>
-    </div>
+      <div id="center-info" class="center-info"></div>
 
-    <div id="turn-indicator" class="turn-indicator"></div>
-
-    <div class="myhand-wrap">
-      <div id="my-hand" class="my-hand"></div>
-      <div class="actions">
-        <button id="play-btn" class="primary" disabled>選択したタイルを出す</button>
-        <button id="pass-btn" class="ghost" disabled>パス</button>
-        <span id="action-msg" class="action-msg"></span>
+      <div id="round-indicator" class="round-indicator"></div>
+      <div class="top-menu">
+        <label class="toggle"><input id="history-toggle" type="checkbox" checked>履歴</label>
+        <button id="drawer-btn" class="ghost small">ログ</button>
+        <button id="rules-btn-game" class="ghost small">ルール</button>
+        <button id="end-btn" class="ghost small">終了提案</button>
+        <button id="leave-btn" class="ghost small">タイトル</button>
       </div>
-    </div>
 
-    <div class="loglane">
-      <div class="log-title">プレイ履歴 / AIの読み</div>
-      <div id="log" class="log"></div>
+      <div id="net-banner" class="net-banner hidden"></div>
+      <div id="turn-indicator" class="turn-indicator"></div>
+
+      <div id="action-float" class="action-float">
+        <span id="action-msg" class="action-msg"></span>
+        <button id="pass-btn" class="ghost" disabled>パス</button>
+        <button id="play-btn" class="primary" disabled>出す</button>
+      </div>
+      <div id="my-hand" class="my-hand"></div>
+
+      <aside id="log-drawer" class="drawer hidden">
+        <div class="drawer-head">プレイ履歴 / AIの読み
+          <button id="drawer-close" class="ghost small">閉じる</button></div>
+        <div id="log" class="log"></div>
+      </aside>
+
+      <aside id="result-panel" class="result-panel hidden">
+        <h2 id="result-title">結果</h2>
+        <p id="result-round" class="result-round"></p>
+        <table id="result-table"></table>
+        <div class="result-actions">
+          <button id="result-again" class="primary">次のラウンドへ</button>
+          <button id="result-hide" class="ghost">盤面を確認</button>
+          <button id="result-title-btn" class="ghost">タイトルへ</button>
+        </div>
+      </aside>
+      <button id="result-chip" class="result-chip hidden">結果を表示</button>
+
+      <div id="orientation-hint" class="orientation-hint">
+        <div class="oh-box">📱↻<br>横画面にしてください</div>
+      </div>
     </div>
   </section>
 
@@ -106,21 +114,6 @@
       <div id="rules-body" class="rules-body"></div>
       <div class="setup-row center">
         <button id="rules-close" class="primary">閉じる</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- リザルト -->
-  <div id="result-overlay" class="overlay hidden">
-    <div class="result-card">
-      <h2 id="result-title">結果</h2>
-      <p id="result-round" class="result-round"></p>
-      <table id="result-table"></table>
-      <p class="result-note">チップは「残り枚数の差」を支払い、手札の<b>2</b>一枚ごとに
-        支払いが ×2（1枚で2倍、2枚で4倍…）になります。</p>
-      <div class="setup-row center">
-        <button id="result-again" class="primary">もう一局</button>
-        <button id="result-title-btn" class="ghost">タイトルへ</button>
       </div>
     </div>
   </div>

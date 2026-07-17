@@ -1,4 +1,4 @@
-// ui.js — ビュー(view)の描画。ローカル/リモート共通。
+// ui.js — ビュー(view)の描画。ローカル/リモート共通。雀魂風の全画面卓レイアウト。
 "use strict";
 
 const $ = (id) => document.getElementById(id);
@@ -8,7 +8,7 @@ let SELECTED = new Set();
 export function clearSelection() { SELECTED = new Set(); }
 export function selectedTiles() { return [...SELECTED]; }
 
-// cls: "flat"=卓上に寝かせた表示, "mini"=履歴用小型
+// cls: "flat"=卓上の表示, "mini"=履歴用小型
 export function tileEl(t, cls, clickable, onToggle) {
   const d = document.createElement("div");
   d.className = "tile " + t.suit_class + (cls ? " " + cls : "");
@@ -33,6 +33,8 @@ function seatPositions(n) {
     default: return ["b", "r", "tr", "tl", "l"];
   }
 }
+
+const AVATAR_HUES = [42, 205, 350, 130, 275]; // 席ごとのアバター色
 
 function thoughtHtml(th) {
   if (!th) return "";
@@ -63,11 +65,22 @@ function renderTable(view, showHistory) {
     seat.className = `seat pos-${pos[visIdx]}`
       + (p.isTurn ? " turn" : "") + (p.finished ? " finished" : "");
 
-    const nm = document.createElement("div");
-    nm.className = "seat-name";
-    nm.textContent = p.name + (p.isYou ? "" : ` ×${p.count}`) + (p.finished ? " 👑" : "");
-    seat.appendChild(nm);
+    // --- 着席パネル（アバター + 名前 + 残枚数） ---
+    const info = document.createElement("div");
+    info.className = "seat-info";
+    const hue = AVATAR_HUES[p.index % AVATAR_HUES.length];
+    info.innerHTML = `
+      <div class="avatar" style="--hue:${hue}">
+        <span>${(p.name || "?").slice(0, 1)}</span>
+        <span class="count-badge">×${p.count}</span>
+      </div>
+      <div class="seat-name">${p.name}${p.finished ? " 👑" : ""}
+        <span class="kind-dot ${p.kind === "ai" ? "ai" : "human"}"></span></div>`;
+    seat.appendChild(info);
 
+    // --- 出牌（現在トリック + 履歴 + パス） ---
+    const zone = document.createElement("div");
+    zone.className = "seat-zone";
     const plays = trickByP[p.index] || [];
 
     if (showHistory) {
@@ -82,7 +95,7 @@ function renderTable(view, showHistory) {
           for (const t of meld) g.appendChild(tileEl(t, "flat mini", false));
           hv.appendChild(g);
         }
-        seat.appendChild(hv);
+        zone.appendChild(hv);
       }
     }
 
@@ -93,71 +106,47 @@ function renderTable(view, showHistory) {
       if (view.currentMeld && view.lastPlayerSeat === p.index) mv.classList.add("live");
       for (const t of latest.tiles) mv.appendChild(tileEl(t, "flat", false));
     }
-    // このトリックでパス済みのプレイヤーには「パス」を表示
     if (p.passed && view.currentMeld) {
       const pc = document.createElement("div");
       pc.className = "pass-chip";
       pc.textContent = "パス";
       mv.appendChild(pc);
     }
-    seat.appendChild(mv);
+    zone.appendChild(mv);
+    seat.appendChild(zone);
     tb.appendChild(seat);
   }
-
-  const c = document.createElement("div");
-  c.className = "table-center";
-  c.innerHTML = view.currentMeld
-    ? `<b>${view.currentMeld.size}枚役</b><span>を上回れ</span>`
-    : `<b>リード</b><span>${view.leader} が自由に出せます</span>`;
-  tb.appendChild(c);
 }
 
-// handlers: {onToggle, }  opts: {showHistory}
+function renderCenter(view) {
+  const c = $("center-info");
+  const situation = view.currentMeld
+    ? `<b>${view.currentMeld.size}枚役</b><span>を上回れ</span>`
+    : `<b>リード</b><span>${view.leader}</span>`;
+  c.innerHTML = `
+    <div class="ci-round">${view.totalRounds > 1 ? `R ${view.round}<i>/</i>${view.totalRounds}` : "一局戦"}</div>
+    <div class="ci-situation">${situation}</div>
+    <div class="ci-last">${view.currentMeld && view.lastPlayer ? view.lastPlayer : ""}</div>`;
+}
+
 export function renderGame(view, opts = {}) {
   clearSelection();
 
   $("round-indicator").textContent =
     view.totalRounds > 1 ? `ラウンド ${view.round} / ${view.totalRounds}` : "";
-  if (!view.terminal) $("result-overlay").classList.add("hidden");
-
-  // 相手情報ストリップ（AIの直近思考つき）
-  const wrap = $("opponents");
-  wrap.innerHTML = "";
-  const lastThoughtByName = {};
-  for (const e of view.log) {
-    if (e.thought) {
-      const m = e.msg.match(/^(\S+)/);
-      if (m) lastThoughtByName[m[1]] = e.thought;
-    }
-  }
-  for (const p of view.players) {
-    if (p.isYou) continue;
-    const d = document.createElement("div");
-    d.className = "opp" + (p.isTurn ? " turn" : "") + (p.finished ? " finished" : "");
-    const kindTag = p.kind === "ai" ? `<span class="tag ai">AI</span>`
-                                    : `<span class="tag human">プレイヤー</span>`;
-    let backs = "";
-    for (let i = 0; i < p.count; i++) backs += `<div class="tile-back"></div>`;
-    const th = lastThoughtByName[p.name];
-    d.innerHTML = `<div class="oname">${p.name} ${kindTag}</div>
-      <div class="ocount">手札 ${p.count} 枚 ${p.finished ? "（上がり）" : ""}</div>
-      <div class="tile-back-row">${backs}</div>
-      ${th ? `<div class="thought">${thoughtHtml(th)}</div>` : ""}`;
-    wrap.appendChild(d);
+  if (!view.terminal) {
+    $("result-panel").classList.add("hidden");
+    $("result-chip").classList.add("hidden");
   }
 
   renderTable(view, opts.showHistory !== false);
-
-  $("board-meta").innerHTML = view.currentMeld
-    ? `最後に出した人: <b>${view.lastPlayer || "-"}</b>　｜　リーダー: ${view.leader}`
-    : `リーダー: <b>${view.leader}</b> が自由にメルドを出せます`;
+  renderCenter(view);
 
   const ti = $("turn-indicator");
-  if (view.terminal) { ti.textContent = ""; }
+  if (view.terminal || view.paused) { ti.textContent = ""; }
   else if (view.yourTurn) {
     ti.className = "turn-indicator you";
-    ti.textContent = view.mustLead ? "▶ あなたの手番（リード：何か出してください）"
-                                   : "▶ あなたの手番（出す or パス）";
+    ti.textContent = view.mustLead ? "▶ あなたの手番（リード）" : "▶ あなたの手番（出す or パス）";
   } else {
     ti.className = "turn-indicator";
     ti.textContent = `${view.turnName} が思考中...`;
@@ -190,7 +179,7 @@ export function renderGame(view, opts = {}) {
 export function showResult(view) {
   const multi = view.totalRounds > 1;
   const tbl = $("result-table");
-  tbl.innerHTML = `<tr><th>プレイヤー</th><th>残り</th><th>2の数</th><th>今回</th>${multi ? "<th>累計</th>" : ""}</tr>`;
+  tbl.innerHTML = `<tr><th>プレイヤー</th><th>残り</th><th>今回</th>${multi ? "<th>累計</th>" : ""}</tr>`;
   const sortKey = view.matchOver && multi ? "total" : "score";
   const sorted = [...view.scores].sort((a, b) => b[sortKey] - a[sortKey]);
   for (const s of sorted) {
@@ -198,30 +187,44 @@ export function showResult(view) {
     const cls = (v) => (v > 0 ? "pos" : (v < 0 ? "neg" : ""));
     const win = s.name === view.winner ? "win" : "";
     tbl.innerHTML += `<tr class="${win}"><td>${s.name}${win ? " 👑" : ""}</td>
-      <td>${s.count}</td><td>${s.twos}</td>
+      <td>${s.count}</td>
       <td class="${cls(s.score)}">${fmt(s.score)}</td>
       ${multi ? `<td class="${cls(s.total)}">${fmt(s.total)}</td>` : ""}</tr>`;
   }
-  if (view.matchOver && multi) {
+  if (view.matchOver) {
     const champ = sorted[0];
     $("result-title").textContent = `🏆 総合優勝: ${champ.name}`;
-    $("result-round").textContent = `全 ${view.totalRounds} ラウンド終了（このラウンドの上がり: ${view.winner}）`;
+    $("result-round").textContent = view.winner
+      ? `このラウンドの上がり: ${view.winner}`
+      : "対戦を終了しました";
   } else {
     $("result-title").textContent = view.winner ? `🏁 ${view.winner} の勝ち！` : "ラウンド終了";
     $("result-round").textContent = multi ? `ラウンド ${view.round} / ${view.totalRounds}` : "";
   }
   $("result-again").textContent = view.matchOver ? "もう一局" : "次のラウンドへ";
-  $("result-overlay").classList.remove("hidden");
+  $("result-panel").classList.remove("hidden");
+  $("result-chip").classList.add("hidden");
 }
 
 export function setActionMessage(msg) {
   $("action-msg").textContent = msg || "";
 }
 
+export function showScreen(name) {
+  for (const id of ["screen-title", "screen-lobby", "screen-game"]) {
+    $(id).classList.toggle("hidden", id !== "screen-" + name);
+  }
+  if (name !== "game") {
+    $("result-panel").classList.add("hidden");
+    $("result-chip").classList.add("hidden");
+    $("net-banner").classList.add("hidden");
+    $("log-drawer").classList.add("hidden");
+  }
+}
+
 // ---- ルール説明（実際の牌グラフィックで表示） ----
 const R_GLYPH = ["☁", "★", "☾", "☀"];
 const R_CLASS = ["cloud", "star", "moon", "sun"];
-// rank/suit から表示用の小型牌HTMLを作る
 const rt = (rank, suit) =>
   `<span class="tile rtile ${R_CLASS[suit]}"><span class="num">${rank}</span><span class="gly">${R_GLYPH[suit]}</span></span>`;
 const meldHtml = (pairs) => pairs.map(([r, s]) => rt(r, s)).join("");
@@ -275,13 +278,7 @@ export function buildRulesContent() {
       <span class="rule-sep">／</span>
       ${meldHtml([[2,0],[2,1]])}<span class="rule-note">2枚 → ×4 …</span>
     </div>
-    <p>設定したラウンド数を繰り返し、累計チップで総合順位が決まります。</p>
+    <p>設定したラウンド数を繰り返し、累計チップで総合順位が決まります。
+      全員の同意があればその場で対戦を終了できます（累計で最終順位）。</p>
   `;
-}
-
-export function showScreen(name) {
-  for (const id of ["screen-title", "screen-lobby", "screen-game"]) {
-    $(id).classList.toggle("hidden", id !== "screen-" + name);
-  }
-  if (name !== "game") $("result-overlay").classList.add("hidden");
 }

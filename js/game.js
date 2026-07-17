@@ -44,12 +44,7 @@ class AiRunner {
       const payload = {
         id,
         numPlayers: state.cfg.numPlayers,
-        state: {
-          hands: state.hands, hidden: state.hidden,
-          currentTiles: state.current ? state.current.tiles : null,
-          leader: state.leader, turn: state.turn, passed: state.passed,
-          lastPlayer: state.lastPlayer, finished: state.finished,
-        },
+        state: state.toJSON(),
         me, belief: belief.toJSON(), opts,
       };
       try {
@@ -74,13 +69,81 @@ export class GameController {
   constructor(numPlayers, seats, totalRounds, onUpdate) {
     this.cfg = standardConfig(numPlayers);
     this.seats = seats.map((s) => ({ ...s }));
-    this.totalRounds = Math.max(1, totalRounds | 0);
+    this.totalRounds = Math.max(1, Math.min(99, totalRounds | 0));
     this.round = 1;
     this.totals = new Array(numPlayers).fill(0);   // 累計チップ
     this.onUpdate = onUpdate || (() => {});
     this.busy = false;             // AI進行中
+    this.paused = false;           // 切断待機などの一時停止
+    this.pausedReason = null;
+    this.matchEnded = false;       // 合意等によるマッチ終了
     this.ai = new AiRunner();
     this._startRound();
+  }
+
+  // ---- リロード復帰 ----
+  snapshot() {
+    return {
+      v: 1,
+      numPlayers: this.cfg.numPlayers,
+      totalRounds: this.totalRounds,
+      round: this.round,
+      totals: [...this.totals],
+      seats: this.seats.map((s) => ({ ...s })),
+      state: this.state.toJSON(),
+      log: this.log.slice(-40),
+      trick: this.trick.map((e) => ({ player: e.player, tiles: [...e.tiles] })),
+      scores: this.scores ? [...this.scores] : null,
+      matchEnded: this.matchEnded,
+      beliefs: Object.fromEntries(
+        [...this.beliefs].map(([s, b]) => [s, b.toJSON()])),
+    };
+  }
+
+  static restore(snap, onUpdate) {
+    const c = Object.create(GameController.prototype);
+    c.cfg = standardConfig(snap.numPlayers);
+    c.seats = snap.seats.map((s) => ({ ...s }));
+    c.totalRounds = snap.totalRounds;
+    c.round = snap.round;
+    c.totals = [...snap.totals];
+    c.onUpdate = onUpdate || (() => {});
+    c.busy = false;
+    c.paused = false;
+    c.pausedReason = null;
+    c.matchEnded = !!snap.matchEnded;
+    c.ai = new AiRunner();
+    c.state = GameState.fromJSON(c.cfg, snap.state);
+    c.log = (snap.log || []).map((e) => ({ ...e }));
+    c.trick = (snap.trick || []).map((e) => ({ player: e.player, tiles: [...e.tiles] }));
+    c.scores = snap.scores ? [...snap.scores] : null;
+    c.beliefs = new Map();
+    for (const [s, bj] of Object.entries(snap.beliefs || {})) {
+      c.beliefs.set(Number(s), BeliefState.fromJSON(c.cfg, bj));
+    }
+    return c;
+  }
+
+  // ---- 一時停止（切断待機） ----
+  setPaused(reason) {
+    this.paused = !!reason;
+    this.pausedReason = reason || null;
+    this.onUpdate();
+    if (!this.paused) this.advance();
+  }
+
+  // ---- 合意等によるマッチ即時終了（累計で最終順位） ----
+  endMatch(note) {
+    if (this.matchEnded) return;
+    this.matchEnded = true;
+    this.paused = false;
+    this.pausedReason = null;
+    if (this.scores === null) {
+      // 進行中のラウンドは中断扱い（今回の収支 0、累計のみで判定）
+      this.scores = new Array(this.cfg.numPlayers).fill(0);
+    }
+    this._note(note || "合意により対戦を終了しました", "finish");
+    this.onUpdate();
   }
 
   _startRound() {
@@ -101,6 +164,7 @@ export class GameController {
 
   // 次のラウンドへ（終局後のみ）
   nextRound() {
+    if (this.matchEnded) return false;
     if (this.scores === null || this.round >= this.totalRounds) return false;
     this.round++;
     this._startRound();
@@ -152,11 +216,11 @@ export class GameController {
 
   // 人間/リモートの手番まで AI を進める（非同期）
   async advance() {
-    if (this.busy) return;
+    if (this.busy || this.paused || this.matchEnded) return;
     this.busy = true;
     this.onUpdate();
     let guard = 0;
-    while (!this.state.isTerminal() && guard++ < 300) {
+    while (!this.state.isTerminal() && !this.paused && !this.matchEnded && guard++ < 300) {
       const p = this.state.turn;
       if (this.seats[p].kind !== "ai") break;
       const belief = this.beliefs.get(p);
@@ -176,6 +240,8 @@ export class GameController {
 
   // 人間(ローカル/リモート)のアクション。エラー文字列 or null を返す。
   play(seat, tileIds) {
+    if (this.paused) return "一時停止中です（切断者の復帰待ち）";
+    if (this.matchEnded) return "対戦は終了しています";
     if (this.state.isTerminal()) return "ゲームは終了しています";
     if (this.state.turn !== seat) return "あなたの手番ではありません";
     const hand = this.state.hands[seat];
@@ -193,6 +259,8 @@ export class GameController {
   }
 
   pass(seat) {
+    if (this.paused) return "一時停止中です（切断者の復帰待ち）";
+    if (this.matchEnded) return "対戦は終了しています";
     if (this.state.isTerminal()) return "ゲームは終了しています";
     if (this.state.turn !== seat) return "あなたの手番ではありません";
     if (this.state.current === null) return "リード時はパスできません（何か出してください）";
@@ -201,25 +269,13 @@ export class GameController {
     return null;
   }
 
-  // 席をAIに切り替える（切断時の引き継ぎ）
-  takeOverByAI(seat) {
-    if (this.seats[seat].kind === "ai") return;
-    const name = this.seats[seat].name;
-    this.seats[seat] = { kind: "ai", name: `${name}(AI)` };
-    const b = new BeliefState(this.cfg, seat, this.state.hands[seat]);
-    // 既知の公開情報を反映
-    for (const pl of this.state.played.flat()) for (const t of pl.tiles) b.playedTiles.add(t);
-    this.beliefs.set(seat, b);
-    this._note(`${name} が切断 → AIが引き継ぎました`, "info");
-    this.advance();
-  }
-
   // seat 視点のビュー（ローカル描画/ネットワーク送信兼用）
   view(seat) {
     const st = this.state;
     const mr = this.cfg.maxRank;
     const names = this.names();
-    const myTurn = st.turn === seat && !st.isTerminal();
+    const blocked = this.paused || this.matchEnded;
+    const myTurn = st.turn === seat && !st.isTerminal() && !blocked;
     const hand = [...st.hands[seat]].sort((a, b) => tileStrength(a, mr) - tileStrength(b, mr));
     return {
       numPlayers: this.cfg.numPlayers,
@@ -241,7 +297,9 @@ export class GameController {
       mustLead: myTurn && st.current === null,
       round: this.round,
       totalRounds: this.totalRounds,
-      matchOver: st.isTerminal() && this.round >= this.totalRounds,
+      matchOver: this.matchEnded || (st.isTerminal() && this.round >= this.totalRounds),
+      paused: this.paused,
+      pausedReason: this.pausedReason,
       players: this.seats.map((s, i) => ({
         index: i, name: names[i], kind: s.kind,
         count: st.hands[i].length,
@@ -258,7 +316,7 @@ export class GameController {
         history: st.played[i].map((m) => m.tiles.map((t) => tileJson(t, mr))),
       })),
       log: this.log.slice(-40),
-      terminal: st.isTerminal(),
+      terminal: st.isTerminal() || this.matchEnded,
       scores: this.scores === null ? null : this.seats.map((_, i) => ({
         name: names[i],
         score: this.scores[i],

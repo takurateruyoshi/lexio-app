@@ -266,6 +266,35 @@ export class GameState {
     return st;
   }
 
+  // リロード復帰用のシリアライズ
+  toJSON() {
+    return {
+      hands: this.hands.map((h) => [...h]),
+      hidden: [...this.hidden],
+      current: this.current ? [...this.current.tiles] : null,
+      leader: this.leader,
+      turn: this.turn,
+      passed: [...this.passed],
+      lastPlayer: this.lastPlayer,
+      played: this.played.map((ms) => ms.map((m) => [...m.tiles])),
+      finished: [...this.finished],
+    };
+  }
+
+  static fromJSON(cfg, d) {
+    const st = new GameState(cfg);
+    st.hands = d.hands.map((h) => [...h]);
+    st.hidden = [...d.hidden];
+    st.current = d.current ? classify(d.current, cfg.maxRank) : null;
+    st.leader = d.leader;
+    st.turn = d.turn;
+    st.passed = [...d.passed];
+    st.lastPlayer = d.lastPlayer;
+    st.played = (d.played || []).map((ms) => ms.map((ts) => classify(ts, cfg.maxRank)));
+    st.finished = [...d.finished];
+    return st;
+  }
+
   activePlayers() {
     const out = [];
     for (let i = 0; i < this.cfg.numPlayers; i++) if (this.hands[i].length) out.push(i);
