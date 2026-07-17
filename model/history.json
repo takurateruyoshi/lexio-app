@@ -32,5 +32,22 @@
       "rFivePref": 0.3535,
       "softPassAccept": 0.1239
     }
+  },
+  {
+    "at": "2026-07-17T08:32:52.452Z",
+    "gen": 18,
+    "games": 3042,
+    "gateMean": 0.22,
+    "gens": 6,
+    "theta": {
+      "wSize": 0.893,
+      "wStrength": 0.0374,
+      "wTwos": -0.4118,
+      "wPass": 0.6808,
+      "rPass": 0.2626,
+      "rComboPref": 0.6771,
+      "rFivePref": 0.4181,
+      "softPassAccept": 0.1883
+    }
   }
 ]
