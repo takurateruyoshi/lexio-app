@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>レキシオ — 対局データ収集ピア</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <section class="panel">
+    <h1>対局データ収集ピア <span class="sub">研究用</span></h1>
+    <p class="lead">このページを開いている間、各プレイヤーの対局終了時に牌譜がP2Pで届き、
+      このブラウザに蓄積されます（匿名化済み・プレイヤー名は含まれません）。<br>
+      タブを閉じると受信は止まりますが、蓄積データは残ります。</p>
+    <p class="hint">ピアID: <b id="peer-id">lexio-webapp-collect-1</b>　状態: <b id="status">起動中…</b></p>
+    <div class="setup-row">
+      <div class="collector-stat">
+        <div class="cs-num" id="total-count">0</div>
+        <div class="cs-label">蓄積ラウンド数</div>
+      </div>
+      <div class="collector-stat">
+        <div class="cs-num" id="session-count">0</div>
+        <div class="cs-label">このセッションで受信</div>
+      </div>
+    </div>
+    <p class="hint" id="last-recv"></p>
+    <div class="setup-row">
+      <button id="export-btn" class="primary">JSONLをエクスポート</button>
+      <button id="clear-btn" class="ghost">蓄積をクリア</button>
+    </div>
+    <div class="loglane" style="margin-top:16px">
+      <div class="log-title">受信ログ</div>
+      <div id="log" class="log" style="max-height:200px;padding:10px"></div>
+    </div>
+  </section>
+</div>
+<script src="vendor/peerjs.min.js"></script>
+<script type="module">
+const PEER_ID = "lexio-webapp-collect-1";
+const $ = (id) => document.getElementById(id);
+
+function openDb() {
+  return new Promise((resolve, reject) => {
+    const rq = indexedDB.open("lexio-collect", 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore("games", { autoIncrement: true });
+    rq.onsuccess = () => resolve(rq.result);
+    rq.onerror = () => reject(rq.error);
+  });
+}
+async function store(records) {
+  const db = await openDb();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction("games", "readwrite");
+    for (const r of records) tx.objectStore("games").add(r);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+}
+async function count() {
+  const db = await openDb();
+  const n = await new Promise((res, rej) => {
+    const rq = db.transaction("games", "readonly").objectStore("games").count();
+    rq.onsuccess = () => res(rq.result);
+    rq.onerror = () => rej(rq.error);
+  });
+  db.close();
+  return n;
+}
+async function getAll() {
+  const db = await openDb();
+  const recs = await new Promise((res, rej) => {
+    const rq = db.transaction("games", "readonly").objectStore("games").getAll();
+    rq.onsuccess = () => res(rq.result);
+    rq.onerror = () => rej(rq.error);
+  });
+  db.close();
+  return recs;
+}
+
+let sessionCount = 0;
+const logLine = (msg) => {
+  const d = document.createElement("div");
+  d.className = "row info";
+  d.textContent = `${new Date().toLocaleTimeString()} ${msg}`;
+  $("log").prepend(d);
+};
+const refresh = async () => {
+  $("total-count").textContent = await count();
+  $("session-count").textContent = sessionCount;
+};
+
+function startPeer(retry = 0) {
+  const peer = new Peer(PEER_ID);
+  peer.on("open", () => { $("status").textContent = "✅ 受信待機中"; });
+  peer.on("error", (e) => {
+    if (e.type === "unavailable-id") {
+      $("status").textContent = "⚠ 別の収集ページが既に開いています（このページは待機のみ）";
+    } else {
+      $("status").textContent = "接続エラー: " + e.type + "（30秒後に再試行）";
+      if (retry < 20) setTimeout(() => startPeer(retry + 1), 30000);
+    }
+  });
+  peer.on("connection", (conn) => {
+    conn.on("data", async (m) => {
+      if (!m || m.t !== "games" || !Array.isArray(m.records)) return;
+      await store(m.records);
+      sessionCount += m.records.length;
+      conn.send({ t: "ack", n: m.records.length });
+      logLine(`${m.records.length} ラウンド受信`);
+      $("last-recv").textContent = `直近の受信: ${new Date().toLocaleString()}`;
+      refresh();
+      setTimeout(() => { try { conn.close(); } catch {} }, 2000);
+    });
+  });
+}
+
+$("export-btn").addEventListener("click", async () => {
+  const recs = await getAll();
+  const jsonl = recs.map((r) => JSON.stringify(r)).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([jsonl], { type: "application/x-ndjson" }));
+  a.download = `lexio-collected-${Date.now()}.jsonl`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+});
+$("clear-btn").addEventListener("click", async () => {
+  if (!confirm("蓄積データを全て削除しますか？")) return;
+  const db = await openDb();
+  await new Promise((res) => { const tx = db.transaction("games", "readwrite"); tx.objectStore("games").clear(); tx.oncomplete = res; });
+  db.close();
+  refresh();
+});
+
+refresh();
+startPeer();
+</script>
+</body>
+</html>

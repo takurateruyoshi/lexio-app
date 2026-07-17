@@ -219,7 +219,7 @@ export function setActionMessage(msg) {
 }
 
 export function showScreen(name) {
-  for (const id of ["screen-title", "screen-lobby", "screen-game"]) {
+  for (const id of ["screen-title", "screen-setup", "screen-lobby", "screen-game"]) {
     $(id).classList.toggle("hidden", id !== "screen-" + name);
   }
   if (name !== "game") {
@@ -230,12 +230,12 @@ export function showScreen(name) {
   }
 }
 
-// ---- ルール説明（実際の牌グラフィックで表示） ----
+// ---- ルール/チュートリアル共通の牌グラフィック部品 ----
 const R_GLYPH = ["☁", "★", "☾", "☀"];
 const R_CLASS = ["cloud", "star", "moon", "sun"];
-const rt = (rank, suit) =>
+export const rt = (rank, suit) =>
   `<span class="tile rtile ${R_CLASS[suit]}"><span class="num">${rank}</span><span class="gly">${R_GLYPH[suit]}</span></span>`;
-const meldHtml = (pairs) => pairs.map(([r, s]) => rt(r, s)).join("");
+export const meldHtml = (pairs) => pairs.map(([r, s]) => rt(r, s)).join("");
 const LT = `<span class="rule-sep">&lt;</span>`;
 
 export function buildRulesContent() {

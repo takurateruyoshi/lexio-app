@@ -5,12 +5,16 @@
 const DB_NAME = "lexio";
 const STORE = "games";
 
-function openDb() {
+export function openDb() {
   return new Promise((resolve, reject) => {
-    const rq = indexedDB.open(DB_NAME, 1);
+    const rq = indexedDB.open(DB_NAME, 2);
     rq.onupgradeneeded = () => {
-      if (!rq.result.objectStoreNames.contains(STORE)) {
-        rq.result.createObjectStore(STORE, { autoIncrement: true });
+      const db = rq.result;
+      if (!db.objectStoreNames.contains(STORE)) {
+        db.createObjectStore(STORE, { autoIncrement: true });
+      }
+      if (!db.objectStoreNames.contains("outbox")) {   // 研究用送信キュー
+        db.createObjectStore("outbox", { autoIncrement: true });
       }
     };
     rq.onsuccess = () => resolve(rq.result);

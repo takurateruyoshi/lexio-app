@@ -1,26 +1,31 @@
-// main.js — 画面遷移と各モード（ソロ/ホスト/ゲスト）の配線・リロード復帰
+// main.js — 画面遷移と各モードの配線
+// フロー: タイトル(続きから/対戦) → 対戦設定(人数・AI席数・ラウンド) → 部屋/ソロ/観戦
 "use strict";
 import { GameController } from "./game.js";
 import { HostSession, GuestSession, STORE_GUEST } from "./net.js";
 import { $, renderGame, setActionMessage, selectedTiles, showScreen, buildRulesContent } from "./ui.js";
 import { loadModel, getTheta } from "./model.js";
 import { saveGameRecord, exportRecordsToFile, countRecords, annotateBlocking } from "./replay.js";
+import { showTutorial, wireTutorial, practiceHint } from "./tutorial.js";
+import { loadCollectConfig, queueRecord, flushOutbox, isOptedOut, setOptOut } from "./collect.js";
 
 const STORE_SOLO = "lexio.solo.v1";
+const NAME_KEY = "lexio.name";
+const SEEN_KEY = "lexio.seen.v1";
 
-let session = null;      // {mode:'solo'|'host'|'guest', ...}
+let session = null;      // {mode:'solo'|'host'|'guest'|'spectate', ...}
 let lastView = null;
-let reconnecting = null; // ゲスト再接続中の表示用
+let reconnecting = null;
+const setup = { size: 3, ai: 0 };   // 対戦設定の状態
 
-const playerName = () => ($("player-name").value.trim() || "あなた");
+const storedName = () => { try { return localStorage.getItem(NAME_KEY) || "あなた"; } catch { return "あなた"; } };
+const saveName = (n) => { try { localStorage.setItem(NAME_KEY, n); } catch {} };
 const numRounds = () => Math.max(1, Math.min(99, parseInt($("num-rounds").value, 10) || 1));
 const showHistory = () => $("history-toggle").checked;
 
-function rerender() {
-  if (lastView) onViewUpdate(lastView);
-}
+function rerender() { if (lastView) onViewUpdate(lastView); }
 
-// ---- 上部バナー（一時停止 / 再接続 / 終了提案） ----
+// ---- 上部バナー（一時停止 / 再接続 / 終了提案 / 練習ヒント） ----
 function renderBanner(view) {
   const b = $("net-banner");
   let html = "";
@@ -40,6 +45,8 @@ function renderBanner(view) {
     if (session && session.mode === "host") {
       html += ` <button id="force-end" class="ghost small">対戦を終了する</button>`;
     }
+  } else if (session && session.practice) {
+    html = practiceHint(view);
   }
   b.innerHTML = html;
   b.classList.toggle("hidden", !html);
@@ -49,41 +56,40 @@ function renderBanner(view) {
   if (fe) fe.addEventListener("click", () => session && session.host && session.host.forceEnd());
 }
 
-// 完了したマッチの牌譜を保存（阻害行動アノテーション付き）
+// 完了したマッチの牌譜を保存 + 研究用送信キューへ
 function saveMatchRecords(ctrl, mode) {
   const th = getTheta();
   for (const rec of ctrl.records) {
     try { annotateBlocking(rec); } catch {}
-    saveGameRecord({
+    const full = {
       mode,
       at: new Date().toISOString(),
       model: { gen: th.gen, games: th.games },
       numPlayers: ctrl.cfg.numPlayers,
       totalRounds: ctrl.totalRounds,
       ...rec,
-    });
+    };
+    saveGameRecord(full);
+    queueRecord(full);
   }
+  setTimeout(() => flushOutbox(), 1000);
 }
 
 function onViewUpdate(view) {
   lastView = view;
   renderGame(view, { showHistory: showHistory() });
   renderBanner(view);
-  // ゲストは次ラウンド/再戦をホスト任せにする
   $("result-again").classList.toggle("hidden", session && session.mode === "guest");
-  // 人間対局の牌譜保存（マッチ終了時に一度）
   if (session && view.matchOver && !session._recSaved) {
     const ctrl = session.ctrl || (session.host && session.host.controller);
-    if (ctrl) { session._recSaved = true; saveMatchRecords(ctrl, session.mode); }
+    if (ctrl) { session._recSaved = true; saveMatchRecords(ctrl, session.practice ? "practice" : session.mode); }
   }
-  // ソロは自動保存（リロード復帰用）
   if (session && session.mode === "solo") {
     try {
-      if (view.matchOver) localStorage.removeItem(STORE_SOLO);
+      if (view.matchOver || session.practice) localStorage.removeItem(STORE_SOLO);
       else localStorage.setItem(STORE_SOLO, JSON.stringify(session.ctrl.snapshot()));
     } catch {}
   }
-  // マッチ終了後はゲストの復帰情報も破棄
   if (session && session.mode === "guest" && view.matchOver) {
     try { sessionStorage.removeItem(STORE_GUEST); } catch {}
   }
@@ -104,14 +110,62 @@ function leaveSession() {
   updateModelInfo();
 }
 
-// ---- ソロ ----
-function startSolo() {
+// ============================== 対戦設定 ==============================
+function goSetup() {
+  showScreen("setup");
+  renderSetup();
+}
+
+function renderSetup() {
+  // 卓の人数
+  document.querySelectorAll("#size-buttons .choice").forEach((b) => {
+    b.classList.toggle("active", parseInt(b.dataset.size, 10) === setup.size);
+  });
+  // AI席数 0..size
+  const ab = $("ai-buttons");
+  ab.innerHTML = "";
+  if (setup.ai > setup.size) setup.ai = setup.size;
+  for (let k = 0; k <= setup.size; k++) {
+    const btn = document.createElement("button");
+    btn.className = "choice" + (k === setup.ai ? " active" : "");
+    btn.textContent = `${k}`;
+    btn.addEventListener("click", () => { setup.ai = k; renderSetup(); });
+    ab.appendChild(btn);
+  }
+  // プレビューとボタンラベル
+  const remaining = setup.size - setup.ai;   // 人間枠（あなた含む）
+  const preview = $("seat-preview");
+  const go = $("setup-go-btn");
+  if (remaining === 0) {
+    preview.textContent = `全席AI（AI×${setup.size}） — AI同士の対局を観戦・記録します`;
+    go.textContent = "🔬 観戦を開始";
+  } else if (remaining === 1) {
+    preview.textContent = `あなた + AI×${setup.ai} — すぐに対局が始まります`;
+    go.textContent = "▶ ソロで開始";
+  } else {
+    preview.textContent = `あなた + 募集 ${remaining - 1}人 + AI×${setup.ai}` +
+      `（開始時に空いている募集席はAIが埋めます）`;
+    go.textContent = "🏠 部屋を作る";
+  }
+  $("spectate-opts").classList.toggle("hidden", remaining !== 0);
+}
+
+function setupGo() {
+  const remaining = setup.size - setup.ai;
+  if (remaining === 0) startSpectate();
+  else if (remaining === 1) startSolo(false);
+  else createRoom();
+}
+
+// ============================== ソロ / 練習 ==============================
+function startSolo(practice) {
   try { localStorage.removeItem(STORE_SOLO); } catch {}
-  const n = parseInt($("num-players").value, 10);
-  const seats = [{ kind: "human", name: playerName() }];
+  const n = practice ? 2 : setup.size;
+  const rounds = practice ? 1 : numRounds();
+  const seats = [{ kind: "human", name: storedName() }];
   for (let i = 1; i < n; i++) seats.push({ kind: "ai", name: `AI-${i}` });
-  const ctrl = new GameController(n, seats, numRounds(), () => onViewUpdate(ctrl.view(0)));
-  session = { mode: "solo", ctrl };
+  const ctrl = new GameController(n, seats, rounds, () => onViewUpdate(ctrl.view(0)));
+  session = { mode: "solo", ctrl, practice: !!practice };
   showScreen("game");
   onViewUpdate(ctrl.view(0));
   ctrl.advance();
@@ -124,7 +178,7 @@ function updateResumeButton() {
     if (!raw) { btn.classList.add("hidden"); return; }
     const snap = JSON.parse(raw);
     if (!snap || snap.v !== 1) { btn.classList.add("hidden"); return; }
-    btn.textContent = `⏸ 続きから再開（${snap.numPlayers}人戦 R${snap.round}/${snap.totalRounds}）`;
+    btn.textContent = `⏸ 続きから（${snap.numPlayers}人戦 R${snap.round}/${snap.totalRounds}）`;
     btn.classList.remove("hidden");
   } catch { btn.classList.add("hidden"); }
 }
@@ -144,49 +198,64 @@ function resumeSolo() {
   }
 }
 
-// ---- ルーム（ホスト） ----
+// ============================== ルーム（ホスト） ==============================
 function hostCallbacks() {
   return {
     onReady: (code) => {
       $("title-hint").textContent = "";
+      $("setup-hint").textContent = "";
+      $("room-code").textContent = code;
+      const link = `${location.origin}${location.pathname}?room=${code}`;
+      $("invite-link").value = link;
+      $("share-link-btn").classList.toggle("hidden", !navigator.share);
       if (!session.host.inGame) {
         showScreen("lobby");
-        $("room-code").textContent = code;
-        $("lobby-status").textContent = "参加を待っています…（空席はAIで埋めて開始できます）";
+        $("lobby-status").textContent = "参加を待っています…（今すぐ開始もできます）";
         $("start-room-btn").classList.remove("hidden");
       } else {
-        $("room-code").textContent = code;
         showScreen("game");
       }
     },
-    onLobby: (seats) => renderLobby(seats, true),
+    onLobby: (seats) => renderLobby(seats),
     onState: (view) => {
       if ($("screen-game").classList.contains("hidden")) showScreen("game");
       onViewUpdate(view);
     },
-    onError: (msg) => { $("title-hint").textContent = msg; leaveSession(); },
+    onError: (msg) => {
+      // 部屋作成に失敗（オフライン等）→ ソロのフォールバックを提示
+      if (session && session.mode === "host" && !session.host.inGame) {
+        $("setup-hint").innerHTML = `${msg} — <button id="offline-solo" class="ghost small">オフラインでソロ開始（募集席はAIになります）</button>`;
+        showScreen("setup");
+        const b = $("offline-solo");
+        if (b) b.addEventListener("click", () => startSolo(false));
+        session = null;
+      } else {
+        $("title-hint").textContent = msg;
+        leaveSession();
+      }
+    },
   };
 }
 
 function createRoom() {
-  $("title-hint").textContent = "接続サーバーに接続中...";
+  $("setup-hint").textContent = "接続サーバーに接続中...";
   session = { mode: "host" };
-  session.host = new HostSession(playerName(), parseInt($("num-players").value, 10),
-                                 numRounds(), hostCallbacks());
+  session.host = new HostSession(storedName(), setup.size, numRounds(), hostCallbacks(),
+                                 null, { openSeats: setup.size - 1 - setup.ai });
 }
 
 function resumeHost(resume) {
-  $("title-hint").textContent = "部屋を復帰中...";
   session = { mode: "host" };
   session.host = new HostSession(null, 0, 0, hostCallbacks(), resume);
   showScreen("game");
 }
 
-// ---- ルーム（ゲスト） ----
+// ============================== ルーム（ゲスト） ==============================
 function guestCallbacks() {
   return {
     onJoined: ({ seat, token, code }) => {
-      $("title-hint").textContent = "";
+      $("join-hint").textContent = "";
+      $("join-overlay").classList.add("hidden");
       reconnecting = null;
       try {
         sessionStorage.setItem(STORE_GUEST, JSON.stringify(
@@ -195,12 +264,13 @@ function guestCallbacks() {
       if (!session.guest.started) {
         showScreen("lobby");
         $("room-code").textContent = code;
+        $("invite-link").value = `${location.origin}${location.pathname}?room=${code}`;
         $("lobby-status").textContent = "ホストの開始を待っています…";
         $("start-room-btn").classList.add("hidden");
       }
       rerender();
     },
-    onLobby: (seats) => renderLobby(seats, false),
+    onLobby: (seats) => renderLobby(seats),
     onStart: () => showScreen("game"),
     onState: (view) => {
       reconnecting = null;
@@ -208,7 +278,7 @@ function guestCallbacks() {
       onViewUpdate(view);
     },
     onReject: (reason) => setActionMessage(reason),
-    onError: (msg) => { $("title-hint").textContent = msg; leaveSession(); },
+    onError: (msg) => { $("join-hint").textContent = msg; $("title-hint").textContent = msg; },
     onReconnecting: (attempt) => {
       reconnecting = attempt;
       if ($("screen-game").classList.contains("hidden")) showScreen("game");
@@ -221,16 +291,21 @@ function guestCallbacks() {
   };
 }
 
-function joinRoom() {
-  const code = $("join-code").value.trim().toUpperCase();
-  if (code.length < 4) { $("title-hint").textContent = "部屋コードを入力してください"; return; }
-  $("title-hint").textContent = "部屋に接続中...";
-  session = { mode: "guest", guestName: playerName() };
-  session.guest = new GuestSession(session.guestName, code, guestCallbacks());
+function showJoinOverlay(code) {
+  $("join-code-label").textContent = code.toUpperCase();
+  $("join-name").value = storedName();
+  $("join-hint").textContent = "";
+  $("join-overlay").classList.remove("hidden");
+  $("join-go-btn").onclick = () => {
+    const name = ($("join-name").value.trim() || "あなた");
+    saveName(name);
+    $("join-hint").textContent = "部屋に接続中...";
+    session = { mode: "guest", guestName: name };
+    session.guest = new GuestSession(name, code.toUpperCase(), guestCallbacks());
+  };
 }
 
 function resumeGuest(saved) {
-  $("title-hint").textContent = "対局へ再接続中...";
   session = { mode: "guest", guestName: saved.name };
   reconnecting = 1;
   showScreen("game");
@@ -239,60 +314,20 @@ function resumeGuest(saved) {
                                    { seat: saved.seat, token: saved.token });
 }
 
-function renderLobby(seats, isHost) {
+function renderLobby(seats) {
   const el = $("lobby-seats");
   el.innerHTML = "";
   for (const s of seats) {
     const d = document.createElement("div");
     d.className = "lobby-seat " + s.kind;
-    const kindLabel = { human: "ホスト", remote: "参加者", open: "→ AIが入ります" }[s.kind] || "";
+    const kindLabel = { human: "ホスト", remote: "参加者", open: "リンク/コードで参加可能",
+                        ai: "AI" }[s.kind] || "";
     d.innerHTML = `<span class="seat-no">席${s.seat + 1}</span> <b>${s.name}</b> <span class="k">${kindLabel}</span>`;
     el.appendChild(d);
   }
 }
 
-// ---- アクション ----
-function actor() {
-  if (!session) return null;
-  if (session.mode === "solo") return {
-    play: (t) => session.ctrl.play(0, t),
-    pass: () => session.ctrl.pass(0),
-  };
-  if (session.mode === "host") return { play: (t) => session.host.play(t), pass: () => session.host.pass() };
-  return { play: (t) => session.guest.play(t), pass: () => session.guest.pass() };
-}
-
-function doPlay() {
-  const a = actor();
-  if (!a) return;
-  const tiles = selectedTiles();
-  if (!tiles.length) return;
-  const err = a.play(tiles);
-  setActionMessage(err);
-  if (!err && session.mode === "solo") onViewUpdate(session.ctrl.view(0));
-}
-
-function doPass() {
-  const a = actor();
-  if (!a) return;
-  const err = a.pass();
-  setActionMessage(err);
-}
-
-function rematch() {
-  if (!session) return;
-  session._recSaved = false;
-  if (session.mode === "solo") {
-    if (!session.ctrl.nextRound()) startSolo();
-  } else if (session.mode === "host") {
-    session.host.advanceMatch();
-  } else if (session.mode === "spectate") {
-    session.gamesDone = 0;   // シリーズを最初から
-    startSpectateGame();
-  }
-}
-
-// ---- AI観戦・記録モード ----
+// ============================== 観戦 ==============================
 function toggleSpectateControls(on) {
   document.querySelectorAll(".spectate-only").forEach((e) => e.classList.toggle("hidden", !on));
   $("end-btn").classList.toggle("hidden", on);
@@ -307,11 +342,10 @@ function spectateAiOpts() {
 }
 
 function startSpectate() {
-  const n = parseInt($("num-players").value, 10);
   session = {
     mode: "spectate",
-    n,
-    rounds: Math.max(1, Math.min(99, parseInt($("num-rounds").value, 10) || 1)),
+    n: setup.size,
+    rounds: numRounds(),
     gamesTarget: Math.max(1, Math.min(100, parseInt($("num-games").value, 10) || 1)),
     gamesDone: 0,
     precise: $("precise-toggle").checked,
@@ -367,11 +401,52 @@ async function updateModelInfo() {
   const th = getTheta();
   const n = await countRecords();
   $("model-info").textContent =
-    `モデル: ${th.gen > 0 ? `世代 ${th.gen}・自己対戦 ${th.games.toLocaleString()} 局で学習済み` : "初期値（学習前）"}` +
+    `AIモデル: ${th.gen > 0 ? `世代 ${th.gen}・自己対戦 ${th.games.toLocaleString()} 局で学習` : "初期値"}` +
     `　｜　保存済み牌譜: ${n} ラウンド`;
 }
 
-// ---- 対戦終了の提案 ----
+// ============================== アクション ==============================
+function actor() {
+  if (!session) return null;
+  if (session.mode === "solo") return {
+    play: (t) => session.ctrl.play(0, t),
+    pass: () => session.ctrl.pass(0),
+  };
+  if (session.mode === "host") return { play: (t) => session.host.play(t), pass: () => session.host.pass() };
+  if (session.mode === "guest") return { play: (t) => session.guest.play(t), pass: () => session.guest.pass() };
+  return null;
+}
+
+function doPlay() {
+  const a = actor();
+  if (!a) return;
+  const tiles = selectedTiles();
+  if (!tiles.length) return;
+  const err = a.play(tiles);
+  setActionMessage(err);
+  if (!err && session.mode === "solo") onViewUpdate(session.ctrl.view(0));
+}
+
+function doPass() {
+  const a = actor();
+  if (!a) return;
+  const err = a.pass();
+  setActionMessage(err);
+}
+
+function rematch() {
+  if (!session) return;
+  session._recSaved = false;
+  if (session.mode === "solo") {
+    if (!session.ctrl.nextRound()) startSolo(session.practice);
+  } else if (session.mode === "host") {
+    session.host.advanceMatch();
+  } else if (session.mode === "spectate") {
+    session.gamesDone = 0;
+    startSpectateGame();
+  }
+}
+
 function proposeEnd() {
   if (!session || !lastView || lastView.matchOver) return;
   if (session.mode === "solo") {
@@ -381,7 +456,7 @@ function proposeEnd() {
     }
   } else if (session.mode === "host") {
     session.host.hostProposeEnd();
-  } else {
+  } else if (session.mode === "guest") {
     session.guest.proposeEnd();
   }
 }
@@ -392,39 +467,87 @@ function voteEnd(agree) {
   else if (session.mode === "guest") session.guest.voteEnd(agree);
 }
 
-// ---- 起動時の自動復帰 ----
+// ============================== 起動 ==============================
 function tryAutoResume() {
+  // 招待リンク（?room=CODE）を最優先
+  const params = new URLSearchParams(location.search);
+  const room = params.get("room");
+  if (room && /^[A-Za-z0-9]{4,6}$/.test(room)) {
+    history.replaceState({}, "", location.pathname);
+    showJoinOverlay(room);
+    return;
+  }
   const hostSave = HostSession.loadResume();
   if (hostSave) { resumeHost(hostSave); return; }
   const guestSave = GuestSession.loadResume();
   if (guestSave) { resumeGuest(guestSave); return; }
   updateResumeButton();
+  // 初回アクセスはチュートリアルを案内
+  try {
+    if (!localStorage.getItem(SEEN_KEY)) {
+      localStorage.setItem(SEEN_KEY, "1");
+      showTutorial(() => startSolo(true));
+    }
+  } catch {}
 }
 
-// ---- 配線 ----
 window.addEventListener("DOMContentLoaded", () => {
   buildRulesContent();
+  wireTutorial();
   loadModel().then(updateModelInfo);
-  $("spectate-btn").addEventListener("click", startSpectate);
+  loadCollectConfig().then(() => {
+    setTimeout(() => flushOutbox(), 5000);
+    setInterval(() => flushOutbox(), 60000);   // 未送信分の定期再送
+  });
+
+  // タイトル
+  $("battle-btn").addEventListener("click", goSetup);
+  $("resume-btn").addEventListener("click", resumeSolo);
+  $("tutorial-btn").addEventListener("click", () => showTutorial(() => startSolo(true)));
+  $("join-room-btn").addEventListener("click", () => {
+    const code = $("join-code").value.trim();
+    if (code.length < 4) { $("title-hint").textContent = "部屋コードを入力してください"; return; }
+    showJoinOverlay(code);
+  });
+  $("join-cancel-btn").addEventListener("click", () => $("join-overlay").classList.add("hidden"));
   $("export-btn").addEventListener("click", async () => {
     const n = await exportRecordsToFile();
     $("title-hint").textContent = `牌譜 ${n} ラウンド分をエクスポートしました`;
   });
-  $("reveal-toggle").addEventListener("change", () => onSpectateUpdate());
-  $("speed-select").addEventListener("change", () => {
-    if (session && session.ctrl) session.ctrl.aiOpts.minDelayMs = parseInt($("speed-select").value, 10);
+  $("collect-toggle").checked = !isOptedOut();
+  $("collect-toggle").addEventListener("change", () => setOptOut(!$("collect-toggle").checked));
+
+  // 対戦設定
+  document.querySelectorAll("#size-buttons .choice").forEach((b) => {
+    b.addEventListener("click", () => { setup.size = parseInt(b.dataset.size, 10); renderSetup(); });
   });
-  $("solo-btn").addEventListener("click", startSolo);
-  $("resume-btn").addEventListener("click", resumeSolo);
-  $("create-room-btn").addEventListener("click", createRoom);
-  $("join-room-btn").addEventListener("click", joinRoom);
+  $("setup-go-btn").addEventListener("click", setupGo);
+  $("setup-back-btn").addEventListener("click", () => showScreen("title"));
+
+  // ロビー
+  $("player-name").value = storedName();
+  $("player-name").addEventListener("change", () => {
+    const n = ($("player-name").value.trim() || "あなた");
+    saveName(n);
+    if (session && session.host) session.host.setName(n);
+  });
   $("start-room-btn").addEventListener("click", () => session && session.host && session.host.startGame());
   $("lobby-leave-btn").addEventListener("click", leaveSession);
+  $("copy-link-btn").addEventListener("click", () => {
+    navigator.clipboard && navigator.clipboard.writeText($("invite-link").value);
+    $("copy-link-btn").textContent = "コピーしました";
+    setTimeout(() => { $("copy-link-btn").textContent = "リンクをコピー"; }, 1200);
+  });
+  $("share-link-btn").addEventListener("click", () => {
+    navigator.share && navigator.share({ title: "レキシオで対戦しよう", url: $("invite-link").value });
+  });
   $("copy-code-btn").addEventListener("click", () => {
     navigator.clipboard && navigator.clipboard.writeText($("room-code").textContent);
     $("copy-code-btn").textContent = "コピーしました";
-    setTimeout(() => { $("copy-code-btn").textContent = "コピー"; }, 1200);
+    setTimeout(() => { $("copy-code-btn").textContent = "コードをコピー"; }, 1200);
   });
+
+  // ゲーム内
   $("play-btn").addEventListener("click", doPlay);
   $("pass-btn").addEventListener("click", doPass);
   $("end-btn").addEventListener("click", proposeEnd);
@@ -444,14 +567,17 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   $("drawer-btn").addEventListener("click", () => $("log-drawer").classList.toggle("hidden"));
   $("drawer-close").addEventListener("click", () => $("log-drawer").classList.add("hidden"));
+  $("reveal-toggle").addEventListener("change", () => onSpectateUpdate());
+  $("speed-select").addEventListener("change", () => {
+    if (session && session.ctrl) session.ctrl.aiOpts.minDelayMs = parseInt($("speed-select").value, 10);
+  });
   const openRules = () => $("rules-overlay").classList.remove("hidden");
   $("rules-btn-title").addEventListener("click", openRules);
   $("rules-btn-game").addEventListener("click", openRules);
   $("rules-close").addEventListener("click", () => $("rules-overlay").classList.add("hidden"));
 
-  // 誤リロード防止（対局中のみ）。リロードしても自動復帰はできる。
   window.addEventListener("beforeunload", (e) => {
-    if (session && lastView && !lastView.matchOver) e.preventDefault();
+    if (session && lastView && !lastView.matchOver && session.mode !== "spectate") e.preventDefault();
   });
 
   tryAutoResume();

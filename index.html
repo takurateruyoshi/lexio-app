@@ -9,61 +9,90 @@
 <body>
 <div id="app">
 
-  <!-- タイトル / セットアップ -->
-  <section id="screen-title" class="panel">
+  <!-- タイトル: 続きから or 対戦 -->
+  <section id="screen-title" class="panel title-panel">
     <h1>レキシオ <span class="sub">オンライン P2P 対戦</span></h1>
-    <p class="lead">麻雀×ポーカー×大富豪。AIと遊ぶもよし、部屋を作って友達と対戦するもよし。
-      空席にはベイズ推定AIが入ります。</p>
-    <div class="setup-row">
-      <label>プレイヤー名
-        <input id="player-name" type="text" value="あなた" maxlength="20">
-      </label>
-      <label>人数（卓の大きさ）
-        <select id="num-players">
-          <option value="2">2人</option>
-          <option value="3" selected>3人</option>
-          <option value="4">4人</option>
-          <option value="5">5人</option>
-        </select>
-      </label>
-      <label>ラウンド数（1〜99）
-        <input id="num-rounds" type="number" min="1" max="99" value="3">
-      </label>
-      <button id="rules-btn-title" class="ghost">ルールを見る</button>
+    <p class="lead">麻雀×ポーカー×大富豪。友達と、AIと、ブラウザだけで。</p>
+    <div class="title-actions">
+      <button id="resume-btn" class="primary big hidden">⏸ 続きから</button>
+      <button id="battle-btn" class="primary big">▶ 対戦する</button>
     </div>
     <div class="setup-row">
-      <button id="resume-btn" class="primary alt hidden">⏸ 続きから再開</button>
-      <button id="solo-btn" class="primary">AIと対戦（ソロ）</button>
-      <button id="create-room-btn" class="primary alt">部屋を作る</button>
       <span class="join-group">
         <input id="join-code" type="text" placeholder="部屋コード" maxlength="6">
-        <button id="join-room-btn" class="ghost">参加する</button>
+        <button id="join-room-btn" class="ghost">コードで参加</button>
       </span>
+      <button id="tutorial-btn" class="ghost">📖 チュートリアル</button>
+    </div>
+    <div class="title-footer">
+      <button id="rules-btn-title" class="ghost small">ルール</button>
+      <button id="export-btn" class="ghost small">牌譜をエクスポート</button>
+      <label class="toggle"><input id="collect-toggle" type="checkbox" checked>
+        対局データを研究用に送信</label>
+    </div>
+    <p class="hint" id="model-info"></p>
+    <p class="hint" id="title-hint"></p>
+  </section>
+
+  <!-- 対戦設定 -->
+  <section id="screen-setup" class="panel hidden">
+    <h1>対戦設定</h1>
+    <div class="setup-block">
+      <div class="setup-label">卓の人数</div>
+      <div id="size-buttons" class="choice-row">
+        <button data-size="2" class="choice">2人</button>
+        <button data-size="3" class="choice active">3人</button>
+        <button data-size="4" class="choice">4人</button>
+        <button data-size="5" class="choice">5人</button>
+      </div>
+    </div>
+    <div class="setup-block">
+      <div class="setup-label">AIの席数（残りは人間の席。全席AIにするとAI同士の対局を観戦できます）</div>
+      <div id="ai-buttons" class="choice-row"></div>
+      <p id="seat-preview" class="seat-preview"></p>
+    </div>
+    <div class="setup-block">
+      <div class="setup-label">ラウンド数（1〜99）</div>
+      <input id="num-rounds" type="number" min="1" max="99" value="3">
+    </div>
+    <div id="spectate-opts" class="setup-block hidden">
+      <div class="setup-label">観戦オプション</div>
+      <div class="setup-row">
+        <label>連続対局数
+          <input id="num-games" type="number" min="1" max="100" value="3">
+        </label>
+        <label class="toggle"><input id="precise-toggle" type="checkbox">
+          精密思考（1手1秒・研究用）</label>
+      </div>
     </div>
     <div class="setup-row">
-      <button id="spectate-btn" class="ghost">🔬 AI観戦・記録</button>
-      <label>連続対局数
-        <input id="num-games" type="number" min="1" max="100" value="3">
-      </label>
-      <label class="toggle"><input id="precise-toggle" type="checkbox">
-        精密思考（1手1秒・研究用）</label>
-      <button id="export-btn" class="ghost small">牌譜をエクスポート</button>
+      <button id="setup-go-btn" class="primary big">部屋を作る</button>
+      <button id="setup-back-btn" class="ghost">戻る</button>
     </div>
-    <p class="hint" id="model-info">モデル: 初期値</p>
-    <p class="hint" id="title-hint"></p>
-    <p class="hint">※ オンライン対戦はP2P接続です。同じWi-Fi内なら確実につながります。
-      リロードしても自動で復帰できます。</p>
+    <p class="hint" id="setup-hint"></p>
   </section>
 
   <!-- ロビー -->
   <section id="screen-lobby" class="panel hidden">
-    <h1>部屋コード <span id="room-code" class="room-code">-----</span>
-      <button id="copy-code-btn" class="ghost small">コピー</button></h1>
-    <p class="lead">このコードを友達に伝えてください。参加者はタイトル画面の「参加する」から入れます。</p>
+    <h1>部屋コード <span id="room-code" class="room-code">-----</span></h1>
+    <div class="setup-row">
+      <label>あなたの名前
+        <input id="player-name" type="text" value="あなた" maxlength="20">
+      </label>
+    </div>
+    <div class="invite-box">
+      <div class="setup-label">友達を招待（リンクを開くだけで参加できます）</div>
+      <div class="invite-row">
+        <input id="invite-link" type="text" readonly>
+        <button id="copy-link-btn" class="ghost small">リンクをコピー</button>
+        <button id="share-link-btn" class="ghost small hidden">共有</button>
+        <button id="copy-code-btn" class="ghost small">コードをコピー</button>
+      </div>
+    </div>
     <div id="lobby-seats" class="lobby-seats"></div>
     <p class="hint" id="lobby-status"></p>
     <div class="setup-row">
-      <button id="start-room-btn" class="primary">空席はAIで埋めて開始</button>
+      <button id="start-room-btn" class="primary">開始する（空席はAIが埋めます）</button>
       <button id="lobby-leave-btn" class="ghost">退出</button>
     </div>
   </section>
@@ -122,6 +151,37 @@
       </div>
     </div>
   </section>
+
+  <!-- リンク/コード参加（名前入力） -->
+  <div id="join-overlay" class="overlay hidden">
+    <div class="result-card join-card">
+      <h2>対局に参加</h2>
+      <p class="lead">部屋 <b id="join-code-label" class="room-code small-code">-----</b> に参加します。</p>
+      <div class="setup-row center">
+        <label>あなたの名前
+          <input id="join-name" type="text" value="あなた" maxlength="20">
+        </label>
+      </div>
+      <div class="setup-row center">
+        <button id="join-go-btn" class="primary">参加する</button>
+        <button id="join-cancel-btn" class="ghost">やめる</button>
+      </div>
+      <p class="hint" id="join-hint"></p>
+    </div>
+  </div>
+
+  <!-- チュートリアル -->
+  <div id="tutorial-overlay" class="overlay hidden">
+    <div class="result-card rules-card tutorial-card">
+      <h2 id="tutorial-title">チュートリアル</h2>
+      <div id="tutorial-body" class="rules-body"></div>
+      <div class="setup-row center">
+        <button id="tutorial-prev" class="ghost">← 前へ</button>
+        <span id="tutorial-step" class="hint"></span>
+        <button id="tutorial-next" class="primary">次へ →</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ルール -->
   <div id="rules-overlay" class="overlay hidden">

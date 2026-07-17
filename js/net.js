@@ -31,11 +31,12 @@ export class HostSession {
    * cb: {onReady(code), onLobby(seats), onState(view), onError(msg)}
    * resume: sessionStorage から復元したデータ（リロード復帰時）
    */
-  constructor(hostName, tableSize, rounds, cb, resume = null) {
+  constructor(hostName, tableSize, rounds, cb, resume = null, opts = {}) {
     this.hostName = hostName;
     this.tableSize = tableSize;
     this.rounds = rounds;
     this.cb = cb;
+    this.openSeats = Math.max(0, Math.min(tableSize - 1, opts.openSeats ?? tableSize - 1));
     this.conns = new Map();     // seat -> DataConnection
     this.seatNames = new Map(); // seat -> name
     this.seatTokens = new Map();// seat -> 復帰用トークン
@@ -48,6 +49,7 @@ export class HostSession {
       this.hostName = resume.hostName;
       this.tableSize = resume.tableSize;
       this.rounds = resume.rounds;
+      this.openSeats = resume.openSeats ?? this.tableSize - 1;
       this.seatNames = new Map(resume.seatNames);
       this.seatTokens = new Map(resume.seatTokens);
       this.inGame = true;
@@ -56,6 +58,11 @@ export class HostSession {
       this.code = randomCode();
     }
     this._openPeer();
+  }
+
+  setName(name) {
+    this.hostName = (name || "あなた").slice(0, 20);
+    if (!this.inGame) this._broadcastLobby();
   }
 
   static loadResume() {
@@ -71,6 +78,7 @@ export class HostSession {
     this.peer = newPeer(peerId(this.code));
     this.peer.on("open", () => {
       this.cb.onReady(this.code);
+      if (!this.resuming) this._broadcastLobby();
       if (this.resuming) {
         this.controller._note("ホストが復帰しました", "info");
         this._updatePause();
@@ -103,7 +111,8 @@ export class HostSession {
     const seats = [{ seat: 0, name: this.hostName, kind: "human" }];
     for (let s = 1; s < this.tableSize; s++) {
       if (this.seatNames.has(s)) seats.push({ seat: s, name: this.seatNames.get(s), kind: "remote" });
-      else seats.push({ seat: s, name: "空席", kind: "open" });
+      else if (s <= this.openSeats) seats.push({ seat: s, name: "募集中", kind: "open" });
+      else seats.push({ seat: s, name: "AI", kind: "ai" });
     }
     return seats;
   }
@@ -161,9 +170,9 @@ export class HostSession {
       }
       return;
     }
-    // ロビー参加
+    // ロビー参加（募集席のみ）
     let seat = -1;
-    for (let s = 1; s < this.tableSize; s++) {
+    for (let s = 1; s <= this.openSeats; s++) {
       if (!this.seatNames.has(s)) { seat = s; break; }
     }
     if (seat < 0) { conn.send({ t: "error", code: "full" }); conn.close(); return; }
@@ -322,6 +331,7 @@ export class HostSession {
         hostName: this.hostName,
         tableSize: this.tableSize,
         rounds: this.rounds,
+        openSeats: this.openSeats,
         seatNames: [...this.seatNames],
         seatTokens: [...this.seatTokens],
         snapshot: this.controller.snapshot(),
