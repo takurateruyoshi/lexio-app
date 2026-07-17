@@ -22,6 +22,7 @@ const setup = { size: 3, ai: 0 };   // 対戦設定の状態
 const storedName = () => { try { return localStorage.getItem(NAME_KEY) || "あなた"; } catch { return "あなた"; } };
 const saveName = (n) => { try { localStorage.setItem(NAME_KEY, n); } catch {} };
 const numRounds = () => Math.max(1, Math.min(99, parseInt($("num-rounds").value, 10) || 1));
+const turnLimit = () => parseInt($("turn-limit").value, 10) || 0;
 const showHistory = () => $("history-toggle").checked;
 
 function rerender() { if (lastView) onViewUpdate(lastView); }
@@ -149,6 +150,7 @@ function renderSetup() {
     go.textContent = "🏠 部屋を作る";
   }
   $("spectate-opts").classList.toggle("hidden", remaining !== 0);
+  $("turn-limit-block").classList.toggle("hidden", remaining === 0);
 }
 
 function setupGo() {
@@ -165,7 +167,8 @@ function startSolo(practice) {
   const rounds = practice ? 1 : numRounds();
   const seats = [{ kind: "human", name: storedName() }];
   for (let i = 1; i < n; i++) seats.push({ kind: "ai", name: `AI-${i}` });
-  const ctrl = new GameController(n, seats, rounds, () => onViewUpdate(ctrl.view(0)));
+  const ctrl = new GameController(n, seats, rounds, () => onViewUpdate(ctrl.view(0)),
+    { turnLimitSec: practice ? 0 : turnLimit() });
   session = { mode: "solo", ctrl, practice: !!practice };
   showScreen("game");
   onViewUpdate(ctrl.view(0));
@@ -242,7 +245,8 @@ function createRoom() {
   $("setup-hint").textContent = "接続サーバーに接続中...";
   session = { mode: "host" };
   session.host = new HostSession(storedName(), setup.size, numRounds(), hostCallbacks(),
-                                 null, { openSeats: setup.size - 1 - setup.ai });
+                                 null, { openSeats: setup.size - 1 - setup.ai,
+                                         turnLimit: turnLimit() });
 }
 
 function resumeHost(resume) {
@@ -337,8 +341,6 @@ function renderLobby(seats) {
 function toggleSpectateControls(on) {
   document.querySelectorAll(".spectate-only").forEach((e) => e.classList.toggle("hidden", !on));
   $("end-btn").classList.toggle("hidden", on);
-  $("pass-btn").classList.toggle("hidden", on);
-  $("play-btn").classList.toggle("hidden", on);
 }
 
 function spectateAiOpts() {
@@ -635,6 +637,20 @@ window.addEventListener("DOMContentLoaded", () => {
   window.addEventListener("beforeunload", (e) => {
     if (session && lastView && !lastView.matchOver && session.mode !== "spectate") e.preventDefault();
   });
+
+  // 思考時間の残りカウントダウン（出すボタンの隣に表示）
+  setInterval(() => {
+    const tt = $("turn-timer");
+    const v = lastView;
+    if (v && v.turnDeadline && v.yourTurn && !v.terminal && !v.paused) {
+      const secs = Math.max(0, Math.ceil((v.turnDeadline - Date.now()) / 1000));
+      tt.textContent = secs;
+      tt.classList.remove("hidden");
+      tt.classList.toggle("urgent", secs <= 5);
+    } else {
+      tt.classList.add("hidden");
+    }
+  }, 250);
 
   tryAutoResume();
 });

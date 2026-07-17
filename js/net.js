@@ -41,6 +41,7 @@ export class HostSession {
     this.rounds = rounds;
     this.cb = cb;
     this.openSeats = Math.max(0, Math.min(tableSize - 1, opts.openSeats ?? tableSize - 1));
+    this.turnLimit = Math.max(0, opts.turnLimit | 0);
     this.conns = new Map();     // seat -> DataConnection
     this.seatNames = new Map(); // seat -> name
     this.seatTokens = new Map();// seat -> 復帰用トークン
@@ -54,6 +55,7 @@ export class HostSession {
       this.tableSize = resume.tableSize;
       this.rounds = resume.rounds;
       this.openSeats = resume.openSeats ?? this.tableSize - 1;
+      this.turnLimit = resume.turnLimit ?? 0;
       this.seatNames = new Map(resume.seatNames);
       this.seatTokens = new Map(resume.seatTokens);
       this.inGame = true;
@@ -230,7 +232,8 @@ export class HostSession {
     }
     this.inGame = true;
     this.controller = new GameController(this.tableSize, seats, this.rounds,
-                                         () => this._pushStates());
+                                         () => this._pushStates(),
+                                         { turnLimitSec: this.turnLimit });
     for (const [seat, conn] of this.conns) conn.send({ t: "start", yourSeat: seat });
     this._pushStates();
     this.controller.advance();
@@ -246,7 +249,8 @@ export class HostSession {
     if (!this.inGame) return;
     const seats = this.controller.seats.map((s) => ({ ...s }));
     this.controller = new GameController(this.tableSize, seats, this.rounds,
-                                         () => this._pushStates());
+                                         () => this._pushStates(),
+                                         { turnLimitSec: this.turnLimit });
     this.proposal = null;
     for (const [seat, conn] of this.conns) conn.send({ t: "start", yourSeat: seat });
     this._pushStates();
@@ -336,6 +340,7 @@ export class HostSession {
         tableSize: this.tableSize,
         rounds: this.rounds,
         openSeats: this.openSeats,
+        turnLimit: this.turnLimit,
         seatNames: [...this.seatNames],
         seatTokens: [...this.seatTokens],
         snapshot: this.controller.snapshot(),

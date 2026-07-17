@@ -2,54 +2,51 @@
 "use strict";
 import { $, rt, meldHtml } from "./ui.js";
 
+const GT = `<span class="rule-sep">→</span>`;
+const LT2 = `<span class="rule-sep">&lt;</span>`;
 const STEPS = [
   {
-    title: "① ゲームの目的",
-    html: `<p>レキシオは<b>手札を最初に出し切った人が勝ち</b>のゲームです。</p>
-      <p>誰かが出し切った瞬間にラウンドが終わり、残った手札の枚数差をチップで精算します。
-      残り枚数が少ないほど損は小さくなるので、最後まで気を抜かずに減らしましょう。</p>`,
+    title: "目的",
+    html: `<div class="tut-big">手札を最初に出し切ったら勝ち 🏆</div>
+      <div class="rule-row tut-center">${meldHtml([[3,0],[7,1],[9,2],[1,0],[2,3]])}
+      ${GT}<span class="tut-zero">0枚</span> 👑</div>`,
   },
   {
-    title: "② 牌の強さ",
-    html: `<div class="rule-row">${rt(3,0)}<span class="rule-sep">&lt;</span>${rt(4,0)}
-      <span class="rule-ellipsis">…</span><span class="rule-sep">&lt;</span>${rt(9,0)}
-      <span class="rule-sep">&lt;</span>${rt(1,0)}<span class="rule-sep">&lt;</span>${rt(2,0)}</div>
-      <p><b>3 が最弱、2 が最強</b>です。1 と 2 は大きい数字よりさらに強い特別な牌。</p>
-      <div class="rule-row">${rt(7,0)}<span class="rule-sep">&lt;</span>${rt(7,1)}
-      <span class="rule-sep">&lt;</span>${rt(7,2)}<span class="rule-sep">&lt;</span>${rt(7,3)}</div>
-      <p>同じ数字はスート（☁雲 &lt; ★星 &lt; ☾月 &lt; ☀太陽）で決着します。</p>`,
+    title: "牌の強さ",
+    html: `<div class="rule-row tut-center">
+      ${rt(3,0)}${LT2}${rt(4,0)}<span class="rule-ellipsis">…</span>${LT2}${rt(9,0)}${LT2}${rt(1,0)}${LT2}${rt(2,0)}</div>
+      <div class="tut-caption">3 が最弱 ・ 2 が最強</div>
+      <div class="rule-row tut-center">${rt(7,0)}${LT2}${rt(7,1)}${LT2}${rt(7,2)}${LT2}${rt(7,3)}</div>`,
   },
   {
-    title: "③ 役（出し方の種類）",
+    title: "役",
     html: `<div class="rule-row"><span class="rule-label">単騎</span>${rt(8,2)}</div>
       <div class="rule-row"><span class="rule-label">ペア</span>${meldHtml([[8,1],[8,3]])}</div>
       <div class="rule-row"><span class="rule-label">トリプル</span>${meldHtml([[8,0],[8,1],[8,2]])}</div>
       <div class="rule-row"><span class="rule-label">5枚役</span>${meldHtml([[4,0],[5,1],[6,2],[7,0],[8,3]])}</div>
-      <p><b>同じ枚数同士でしか勝負できません</b>。ペアにはペア、単騎には単騎で上回ります。
-      5枚役の強さはストレート &lt; フラッシュ &lt; フルハウス &lt; フォーカード &lt; ストレートフラッシュ。</p>`,
+      <div class="tut-caption">同じ枚数同士でだけ勝負</div>`,
   },
   {
-    title: "④ 画面の操作",
-    html: `<p>自分の手番になると画面下の手牌が光ります。</p>
-      <p><b>牌をタップして選び</b>、右下の<b>「出す」</b>ボタンで場に出します。
-      出せない・出したくない時は<b>「パス」</b>。</p>
-      <p>間違えて選んだ牌はもう一度タップで選択解除。右上の「ログ」からAIの読み
-      （勝率・期待収支）も見られます。</p>`,
+    title: "操作",
+    html: `<div class="tut-big">タップで選ぶ ${GT} <span class="tut-btn gold">出す</span></div>
+      <div class="tut-big">出せない時は <span class="tut-btn">パス</span></div>
+      <div class="tut-caption">自分の番になると手牌が光ります</div>`,
   },
   {
-    title: "⑤ 場の流れ",
-    html: `<p>リーダーが好きな役を出し、時計回りに「より強い同じ枚数の役」か「パス」を選びます。</p>
-      <p>パスしても抜けにはなりません — <b>誰かが新しい役を出せばまた出せます</b>。</p>
-      <p>全員がパスすると場が流れ、最後に出した人が次のリーダーに。
-      強い牌をいつ使うかが勝負どころです。</p>`,
+    title: "場の流れ",
+    html: `<div class="rule-row tut-center">${rt(5,0)}${LT2}${rt(9,2)}${LT2}${rt(2,3)}</div>
+      <div class="tut-caption">同じ枚数で、より強く</div>
+      <div class="rule-row tut-center"><span class="tut-btn">パス</span>${GT}
+      ${rt(9,2)}${GT}<span class="tut-ok">また出せる</span></div>
+      <div class="tut-caption">全員パスで場が流れる</div>`,
   },
   {
-    title: "⑥ 精算とコツ",
-    html: `<p>ラウンド終了時、残り枚数の差を互いにチップで支払います。</p>
-      <div class="rule-row"><span class="rule-label">注意!</span>
-      ${rt(2,0)}<span class="rule-note">が手札に残ると支払いが×2（2枚で×4…）</span></div>
-      <p>最強の 2 は強力ですが、抱えたまま終わると大損。<b>使い所を見極めましょう</b>。</p>
-      <p>それでは、ヒント付きの練習対局へどうぞ！</p>`,
+    title: "精算",
+    html: `<div class="rule-row tut-center">残り ${meldHtml([[5,0],[9,1]])} ${GT}
+      <span class="tut-zero">−2点</span></div>
+      <div class="rule-row tut-center">${rt(2,0)} が残ると <span class="tut-zero">×2</span>
+      　${meldHtml([[2,0],[2,1]])} ${GT} <span class="tut-zero">×4</span></div>
+      <div class="tut-caption">それでは練習対局へ！</div>`,
   },
 ];
 

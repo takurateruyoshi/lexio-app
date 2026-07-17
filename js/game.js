@@ -3,7 +3,7 @@
 import {
   standardConfig, GameState, classify, beats, canBeat, enumerateMelds,
   legalMoves, roundScores, meldText, tileRank, tileSuit, tileStrength,
-  SUIT_CLASS, SUIT_LABEL, SUIT_GLYPH,
+  compareKeys, SUIT_CLASS, SUIT_LABEL, SUIT_GLYPH,
 } from "./engine.js";
 import { BeliefState, chooseMove } from "./ai.js";
 import { getTheta } from "./model.js";
@@ -68,12 +68,14 @@ export class GameController {
    * seats: 席ごとの {kind: "human"|"ai"|"remote", name}
    * totalRounds: ラウンド数（累計チップで総合順位）
    * onUpdate(): 状態変化時に呼ばれる（ビューは view(seat) で取得）
-   * aiOpts: {minDelayMs, budgetMs, totalPlayouts, record} 観戦/研究モード用
+   * aiOpts: {minDelayMs, budgetMs, totalPlayouts, turnLimitSec} 観戦/研究/ホスト設定
    */
   constructor(numPlayers, seats, totalRounds, onUpdate, aiOpts = {}) {
     this.cfg = standardConfig(numPlayers);
     this.seats = seats.map((s) => ({ ...s }));
     this.aiOpts = { ...aiOpts };
+    this.turnLimitSec = Math.max(0, aiOpts.turnLimitSec | 0);  // 0=無制限
+    this._turnDeadline = null;
     this.records = [];             // ラウンドごとの牌譜
     this.totalRounds = Math.max(1, Math.min(99, totalRounds | 0));
     this.round = 1;
@@ -101,7 +103,7 @@ export class GameController {
       trick: this.trick.map((e) => ({ player: e.player, tiles: [...e.tiles] })),
       scores: this.scores ? [...this.scores] : null,
       matchEnded: this.matchEnded,
-      aiOpts: { ...this.aiOpts },
+      aiOpts: { ...this.aiOpts, turnLimitSec: this.turnLimitSec },
       beliefs: Object.fromEntries(
         [...this.beliefs].map(([s, b]) => [s, b.toJSON()])),
     };
@@ -120,6 +122,8 @@ export class GameController {
     c.pausedReason = null;
     c.matchEnded = !!snap.matchEnded;
     c.aiOpts = { ...(snap.aiOpts || {}) };
+    c.turnLimitSec = Math.max(0, (c.aiOpts.turnLimitSec || 0) | 0);
+    c._turnDeadline = null;
     c.records = [];
     c._rec = { round: snap.round, seats: [], deal: [], moves: [], scores: null }; // 復元後の途中記録は簡略
     c.ai = new AiRunner();
@@ -131,6 +135,7 @@ export class GameController {
     for (const [s, bj] of Object.entries(snap.beliefs || {})) {
       c.beliefs.set(Number(s), BeliefState.fromJSON(c.cfg, bj));
     }
+    c._armTurnTimer();
     return c;
   }
 
@@ -138,6 +143,7 @@ export class GameController {
   setPaused(reason) {
     this.paused = !!reason;
     this.pausedReason = reason || null;
+    this._armTurnTimer();     // 停止中は解除・再開でリセット
     this.onUpdate();
     if (!this.paused) this.advance();
   }
@@ -148,6 +154,8 @@ export class GameController {
     this.matchEnded = true;
     this.paused = false;
     this.pausedReason = null;
+    clearTimeout(this._turnTimer);
+    this._turnDeadline = null;
     if (this.scores === null) {
       // 進行中のラウンドは中断扱い（今回の収支 0、累計のみで判定）
       this.scores = new Array(this.cfg.numPlayers).fill(0);
@@ -178,6 +186,7 @@ export class GameController {
     this._note(`ラウンド ${this.round}/${this.totalRounds} 開始: `
       + `${this.cfg.numPlayers}人戦 / 数字1〜${this.cfg.maxRank} / 配牌${this.cfg.handSize}枚`);
     this._note(`${this.names()[this.state.leader]} のリードから開始（☁3 保持者）`);
+    this._armTurnTimer();
   }
 
   // 次のラウンドへ（終局後のみ）
@@ -189,6 +198,37 @@ export class GameController {
     this.onUpdate();
     this.advance();
     return true;
+  }
+
+  // ---- 思考時間制限（人間の手番のみ・時間切れで自動パス/最弱リード） ----
+  _armTurnTimer() {
+    clearTimeout(this._turnTimer);
+    this._turnDeadline = null;
+    if (!this.turnLimitSec) return;
+    const st = this.state;
+    if (st.isTerminal() || this.paused || this.matchEnded) return;
+    const seat = st.turn;
+    if (this.seats[seat].kind === "ai") return;
+    this._turnDeadline = Date.now() + this.turnLimitSec * 1000;
+    this._turnTimer = setTimeout(() => this._onTurnTimeout(seat), this.turnLimitSec * 1000);
+  }
+
+  _onTurnTimeout(seat) {
+    const st = this.state;
+    if (st.turn !== seat || st.isTerminal() || this.paused || this.matchEnded) return;
+    this._note(`⏱ ${this.names()[seat]} は時間切れ`, "pass");
+    if (st.current !== null) {
+      this.pass(seat);
+      return;
+    }
+    // リードは最弱の役を自動で出す
+    let best = null;
+    for (const m of legalMoves(st.hands[seat], null, this.cfg)) {
+      if (m === null) continue;
+      if (best === null || m.size < best.size ||
+          (m.size === best.size && compareKeys(m.key, best.key) < 0)) best = m;
+    }
+    if (best) this.play(seat, best.tiles);
   }
 
   names() { return this.seats.map((s) => s.name); }
@@ -240,6 +280,7 @@ export class GameController {
       this._rec.finished = [...this.state.finished];
       this.records.push(this._rec);
     }
+    this._armTurnTimer();
   }
 
   // 人間/リモートの手番まで AI を進める（非同期）
@@ -335,6 +376,8 @@ export class GameController {
       matchOver: this.matchEnded || (st.isTerminal() && this.round >= this.totalRounds),
       paused: this.paused,
       pausedReason: this.pausedReason,
+      turnLimit: this.turnLimitSec,
+      turnDeadline: this._turnDeadline,
       players: this.seats.map((s, i) => ({
         index: i, name: names[i], kind: s.kind,
         count: st.hands[i].length,

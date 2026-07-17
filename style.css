@@ -92,6 +92,18 @@ button.choice.active{
 .invite-row input{flex:1;min-width:220px;font-size:12px;color:var(--muted)}
 .room-code.small-code{font-size:20px;padding:2px 10px}
 .join-card{max-width:420px}
+/* チュートリアル（視覚中心） */
+.tut-big{font-size:18px;font-weight:700;color:var(--text);margin:14px 0;text-align:center;
+  display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
+.tut-caption{font-size:12px;color:var(--muted);text-align:center;margin:6px 0 14px}
+.tut-center{justify-content:center}
+.tut-zero{font-size:16px;font-weight:800;color:#ff8a7d}
+.tut-ok{font-size:14px;font-weight:700;color:#5cd08a}
+.tut-btn{display:inline-block;background:rgba(0,0,0,.6);border:1px solid var(--line2);
+  border-radius:10px;padding:6px 18px;font-size:14px;font-weight:700;letter-spacing:.1em}
+.tut-btn.gold{background:linear-gradient(175deg,#f2d488,var(--gold) 45%,var(--gold2));
+  color:#3a2a06;border:none}
+
 .diag-body{display:flex;flex-direction:column;gap:10px;margin:14px 0;text-align:left}
 .diag-row{font-size:14px;background:rgba(0,0,0,.3);border:1px solid var(--line);
   border-radius:10px;padding:10px 14px}
@@ -195,25 +207,18 @@ button.choice.active{
   border-radius:11px;padding:3px 11px;letter-spacing:.15em;
 }
 
-/* ---- 中央: 現在の場の役を強調表示 ---- */
+/* ---- 中央: 最新の手（牌のみ・文章なし） ---- */
 .center-info{
   position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);
-  min-width:150px;padding:12px 22px 14px;text-align:center;pointer-events:none;
-  background:linear-gradient(175deg,rgba(10,11,14,.88),rgba(20,22,27,.88));
-  border:1px solid rgba(233,196,106,.55);border-radius:14px;
-  box-shadow:0 0 28px rgba(233,196,106,.18), 0 10px 30px rgba(0,0,0,.65),
+  padding:14px 18px;pointer-events:none;
+  background:linear-gradient(175deg,rgba(10,11,14,.82),rgba(20,22,27,.82));
+  border:1px solid rgba(233,196,106,.5);border-radius:14px;
+  box-shadow:0 0 28px rgba(233,196,106,.16), 0 10px 30px rgba(0,0,0,.6),
     inset 0 1px 0 rgba(255,255,255,.08);
-  display:flex;flex-direction:column;gap:8px;align-items:center;
 }
-.ci-round{font-size:11px;font-weight:800;color:var(--gold);letter-spacing:.14em}
-.ci-round i{font-style:normal;color:var(--muted);margin:0 1px}
-.ci-meld{display:flex;gap:6px;justify-content:center;padding:2px 0 6px}
-.ci-meld .tile.flat{--w:48px;--h:66px}
-.ci-meld .tile.flat .num{font-size:24px}
-.ci-situation b{font-size:15px;color:var(--text);letter-spacing:.08em}
-.ci-situation span{font-size:11px;color:var(--muted);margin-left:6px}
-.ci-last{font-size:12px;color:var(--muted)}
-.ci-last b{color:var(--gold)}
+.ci-meld{display:flex;gap:6px;justify-content:center;padding-bottom:8px}
+.ci-meld .tile.flat{--w:50px;--h:68px}
+.ci-meld .tile.flat .num{font-size:25px}
 
 /* ---- 上部メニュー / バナー ---- */
 .round-indicator{
@@ -243,19 +248,28 @@ button.choice.active{
   text-shadow:0 0 14px rgba(233,196,106,.55);animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.65}}
 
-/* アクションボタン: 雀魂のロン/リーチ位置（右側・手牌の上） */
-.action-float{
-  position:absolute;right:4%;bottom:200px;z-index:20;
-  display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end;
-  max-width:60%;
+/* アクションボタン: 手牌のすぐ上（パス=左端 / 出す=右端）中型 */
+.side-btn{position:absolute;bottom:116px;z-index:20;display:flex;align-items:center;gap:12px}
+.side-left{left:3%}
+.side-right{right:3%}
+.side-btn .primary,button.side-btn.ghost,.side-btn .ghost{
+  padding:13px 30px;font-size:17px;border-radius:12px;letter-spacing:.12em}
+button.side-btn.ghost{background:rgba(0,0,0,.6)}
+.turn-timer{
+  font-size:32px;font-weight:800;color:var(--gold);
+  text-shadow:0 0 12px rgba(233,196,106,.6);min-width:44px;text-align:right;
 }
-.action-float .primary{padding:18px 40px;font-size:20px;border-radius:14px;
-  letter-spacing:.1em}
-.action-float .ghost{padding:16px 30px;font-size:17px;border-radius:14px;
-  background:rgba(0,0,0,.6);letter-spacing:.1em}
-.action-msg{font-size:12px;color:#ff9a8f;background:rgba(0,0,0,.6);
-  padding:6px 12px;border-radius:8px;max-width:340px;flex-basis:100%;text-align:right}
+.turn-timer.urgent{color:#ff6b5e;text-shadow:0 0 14px rgba(255,107,94,.7);
+  animation:pulse 1s ease-in-out infinite}
+.action-msg{position:absolute;bottom:116px;left:50%;transform:translateX(-50%);
+  z-index:20;font-size:12px;color:#ff9a8f;background:rgba(0,0,0,.6);
+  padding:6px 12px;border-radius:8px;max-width:340px;text-align:center}
 .action-msg:empty{display:none}
+
+/* 手番は手牌のグローで伝える */
+.my-hand.your-turn{
+  filter:drop-shadow(0 -4px 22px rgba(233,196,106,.4));
+}
 
 /* 自分の名前+持ち点（手牌の左上・控えめ） */
 .my-info{
@@ -469,14 +483,15 @@ button.choice.active{
   .avatar{width:36px;height:36px;font-size:15px}
   .seat-name{font-size:10px;padding:1px 8px}
   .table3d{bottom:88px}
-  .turn-indicator{bottom:196px;font-size:12px}
-  .action-float{bottom:130px;right:3%}
-  .action-float .primary{padding:12px 24px;font-size:16px}
-  .action-float .ghost{padding:10px 18px;font-size:14px}
+  .side-btn{bottom:94px}
+  .side-btn .primary{padding:10px 22px;font-size:14px}
+  button.side-btn.ghost{padding:9px 16px;font-size:13px}
+  .turn-timer{font-size:24px;min-width:32px}
+  .action-msg{bottom:94px}
   .my-info{bottom:70px;left:8px;font-size:10px;padding:3px 8px}
   .ci-meld .tile.flat{--w:38px;--h:52px}
   .ci-meld .tile.flat .num{font-size:17px}
-  .center-info{padding:8px 14px 10px}
+  .center-info{padding:10px 12px}
   .my-hand{padding:8px 6px 6px}
   .seat-meld{min-height:40px}
   .pos-t{top:34px}

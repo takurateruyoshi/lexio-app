@@ -56,6 +56,15 @@
       <div class="setup-label">ラウンド数（1〜99）</div>
       <input id="num-rounds" type="number" min="1" max="99" value="3">
     </div>
+    <div class="setup-block" id="turn-limit-block">
+      <div class="setup-label">思考時間の制限（時間切れは自動でパス/最弱リード）</div>
+      <select id="turn-limit">
+        <option value="0" selected>なし</option>
+        <option value="15">15秒</option>
+        <option value="30">30秒</option>
+        <option value="60">60秒</option>
+      </select>
+    </div>
     <div id="spectate-opts" class="setup-block hidden">
       <div class="setup-label">観戦オプション</div>
       <div class="setup-row">
@@ -119,13 +128,13 @@
       </div>
 
       <div id="net-banner" class="net-banner hidden"></div>
-      <div id="turn-indicator" class="turn-indicator"></div>
 
-      <div id="action-float" class="action-float">
-        <span id="action-msg" class="action-msg"></span>
-        <button id="pass-btn" class="ghost" disabled>パス</button>
+      <button id="pass-btn" class="ghost side-btn side-left hidden" disabled>パス</button>
+      <div id="play-wrap" class="side-btn side-right hidden">
+        <span id="turn-timer" class="turn-timer hidden"></span>
         <button id="play-btn" class="primary" disabled>出す</button>
       </div>
+      <span id="action-msg" class="action-msg"></span>
       <div id="my-info" class="my-info"></div>
       <div id="my-hand" class="my-hand"></div>
 

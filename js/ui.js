@@ -118,38 +118,23 @@ function renderTable(view, showHistory) {
   }
 }
 
-// 卓の中央に「現在の場の役」を大きく強調表示
+// 卓の中央には「最新の手（現在の場の役）」の牌のみを表示（文章なし）
 function renderCenter(view) {
   const c = $("center-info");
   c.innerHTML = "";
-  const round = document.createElement("div");
-  round.className = "ci-round";
-  round.innerHTML = view.totalRounds > 1
-    ? `R ${view.round}<i>/</i>${view.totalRounds}` : "一局戦";
-  c.appendChild(round);
-
-  if (view.currentMeld) {
-    const meld = document.createElement("div");
-    meld.className = "ci-meld";
-    for (const t of view.currentMeld.tiles) meld.appendChild(tileEl(t, "flat", false));
-    c.appendChild(meld);
-    const who = document.createElement("div");
-    who.className = "ci-last";
-    who.innerHTML = `<b>${view.lastPlayer || "-"}</b> の ${view.currentMeld.size}枚役`;
-    c.appendChild(who);
-  } else {
-    const lead = document.createElement("div");
-    lead.className = "ci-situation";
-    lead.innerHTML = `<b>リード</b><span>${view.leader} が自由に出せます</span>`;
-    c.appendChild(lead);
-  }
+  if (!view.currentMeld) { c.classList.add("hidden"); return; }
+  c.classList.remove("hidden");
+  const meld = document.createElement("div");
+  meld.className = "ci-meld";
+  for (const t of view.currentMeld.tiles) meld.appendChild(tileEl(t, "flat", false));
+  c.appendChild(meld);
 }
 
 export function renderGame(view, opts = {}) {
   clearSelection();
 
-  $("round-indicator").textContent =
-    view.totalRounds > 1 ? `ラウンド ${view.round} / ${view.totalRounds}` : "";
+  // 回戦は左上（テキストは最小限）
+  $("round-indicator").textContent = `R ${view.round}/${view.totalRounds}`;
   if (!view.terminal) {
     $("result-panel").classList.add("hidden");
     $("result-chip").classList.add("hidden");
@@ -158,30 +143,25 @@ export function renderGame(view, opts = {}) {
   renderTable(view, opts.showHistory !== false);
   renderCenter(view);
 
-  const ti = $("turn-indicator");
-  if (view.terminal || view.paused) { ti.textContent = ""; }
-  else if (view.yourTurn) {
-    ti.className = "turn-indicator you";
-    ti.textContent = view.mustLead ? "▶ あなたの手番（リード）" : "▶ あなたの手番（出す or パス）";
-  } else {
-    ti.className = "turn-indicator";
-    ti.textContent = `${view.turnName} が思考中...`;
-  }
-
   // 自分の名前と持ち点（手牌の左上に小さく）
   const me = view.players.find((p) => p.isYou);
   $("my-info").innerHTML = me
     ? `${me.name}　<b>${me.points}点</b>${me.finished ? " 👑" : ""}` : "";
 
+  const myTurn = view.yourTurn && !view.terminal;
   const mh = $("my-hand");
+  mh.classList.toggle("your-turn", myTurn);   // 手番は手牌のグローで伝える
   mh.innerHTML = "";
   for (const t of view.yourHand) {
-    mh.appendChild(tileEl(t, "", view.yourTurn && !view.terminal, () => {
+    mh.appendChild(tileEl(t, "", myTurn, () => {
       $("play-btn").disabled = SELECTED.size === 0 || !view.yourTurn;
     }));
   }
 
+  // ボタンは必要な時だけ出す（パス=左 / 出す=右）
+  $("pass-btn").classList.toggle("hidden", !view.canPass);
   $("pass-btn").disabled = !view.canPass;
+  $("play-wrap").classList.toggle("hidden", !myTurn);
   $("play-btn").disabled = true;
 
   if (view.terminal && view.scores) showResult(view);
