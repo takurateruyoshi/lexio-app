@@ -37,6 +37,7 @@
 </div>
 <script src="vendor/peerjs.min.js"></script>
 <script type="module">
+import { loadNetConfig, getIceServers } from "./js/netconfig.js";
 const PEER_ID = "lexio-webapp-collect-1";
 const $ = (id) => document.getElementById(id);
 
@@ -92,7 +93,7 @@ const refresh = async () => {
 };
 
 function startPeer(retry = 0) {
-  const peer = new Peer(PEER_ID);
+  const peer = new Peer(PEER_ID, { config: { iceServers: getIceServers() } });
   peer.on("open", () => { $("status").textContent = "✅ 受信待機中"; });
   peer.on("error", (e) => {
     if (e.type === "unavailable-id") {
@@ -134,7 +135,7 @@ $("clear-btn").addEventListener("click", async () => {
 });
 
 refresh();
-startPeer();
+loadNetConfig().then(() => startPeer());
 </script>
 </body>
 </html>

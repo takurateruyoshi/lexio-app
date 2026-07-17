@@ -8,6 +8,7 @@ import { loadModel, getTheta } from "./model.js";
 import { saveGameRecord, exportRecordsToFile, countRecords, annotateBlocking } from "./replay.js";
 import { showTutorial, wireTutorial, practiceHint } from "./tutorial.js";
 import { loadCollectConfig, queueRecord, flushOutbox, isOptedOut, setOptOut } from "./collect.js";
+import { loadNetConfig, getIceServers } from "./netconfig.js";
 
 const STORE_SOLO = "lexio.solo.v1";
 const NAME_KEY = "lexio.name";
@@ -278,7 +279,12 @@ function guestCallbacks() {
       onViewUpdate(view);
     },
     onReject: (reason) => setActionMessage(reason),
-    onError: (msg) => { $("join-hint").textContent = msg; $("title-hint").textContent = msg; },
+    onProgress: (msg) => { $("join-stage").textContent = msg || ""; },
+    onError: (msg) => {
+      $("join-stage").textContent = "";
+      $("join-hint").textContent = msg;
+      $("title-hint").textContent = msg;
+    },
     onReconnecting: (attempt) => {
       reconnecting = attempt;
       if ($("screen-game").classList.contains("hidden")) showScreen("game");
@@ -491,14 +497,66 @@ function tryAutoResume() {
   } catch {}
 }
 
+// ---- 接続診断（シグナリング / STUN / TURN） ----
+async function runDiagnosis() {
+  const set = (id, v) => { $(id).textContent = v; };
+  set("diag-sig", "⏳"); set("diag-stun", "⏳"); set("diag-turn", "⏳");
+  $("diag-advice").textContent = "テスト中…（数秒かかります）";
+
+  // 1) シグナリング（PeerJSクラウド）
+  const sigOk = await new Promise((resolve) => {
+    let done = false;
+    const p = new Peer({ config: { iceServers: getIceServers() } });
+    const fin = (ok) => { if (!done) { done = true; try { p.destroy(); } catch {} resolve(ok); } };
+    p.on("open", () => fin(true));
+    p.on("error", () => fin(false));
+    setTimeout(() => fin(false), 8000);
+  });
+  set("diag-sig", sigOk ? "✅" : "❌");
+
+  // 2) STUN / TURN（ICE candidate 収集）
+  const types = new Set();
+  await new Promise((resolve) => {
+    let pc;
+    try { pc = new RTCPeerConnection({ iceServers: getIceServers() }); }
+    catch { resolve(); return; }
+    pc.createDataChannel("diag");
+    pc.onicecandidate = (e) => {
+      if (!e.candidate) { pc.close(); resolve(); return; }
+      const m = / typ (\w+)/.exec(e.candidate.candidate);
+      if (m) types.add(m[1]);
+    };
+    pc.createOffer().then((o) => pc.setLocalDescription(o));
+    setTimeout(() => { try { pc.close(); } catch {} resolve(); }, 10000);
+  });
+  const stunOk = types.has("srflx");
+  const turnOk = types.has("relay");
+  set("diag-stun", stunOk ? "✅" : "❌");
+  set("diag-turn", turnOk ? "✅" : "❌");
+
+  let advice;
+  if (sigOk && turnOk) advice = "✅ すべて正常です。どのネットワークの相手とも対戦できるはずです。";
+  else if (!sigOk) advice = "仲介サーバーに到達できません。Wi-Fi/回線を変えるか、ファイアウォールの設定をご確認ください。";
+  else if (!turnOk) advice = "TURN中継に到達できません。厳しいNAT環境の相手（モバイル回線など）とは接続できない場合があります。回線を変えて再テストしてください。";
+  else advice = "STUNが取得できませんが、TURN中継があるため対戦は可能です。";
+  $("diag-advice").textContent = advice;
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   buildRulesContent();
   wireTutorial();
   loadModel().then(updateModelInfo);
+  loadNetConfig();   // TURN/STUN 設定（model/net.json）
   loadCollectConfig().then(() => {
     setTimeout(() => flushOutbox(), 5000);
     setInterval(() => flushOutbox(), 60000);   // 未送信分の定期再送
   });
+  $("diag-btn").addEventListener("click", () => {
+    $("diag-overlay").classList.remove("hidden");
+    runDiagnosis();
+  });
+  $("diag-run").addEventListener("click", runDiagnosis);
+  $("diag-close").addEventListener("click", () => $("diag-overlay").classList.add("hidden"));
 
   // タイトル
   $("battle-btn").addEventListener("click", goSetup);
@@ -565,8 +623,6 @@ window.addEventListener("DOMContentLoaded", () => {
     $("result-panel").classList.remove("hidden");
     $("result-chip").classList.add("hidden");
   });
-  $("drawer-btn").addEventListener("click", () => $("log-drawer").classList.toggle("hidden"));
-  $("drawer-close").addEventListener("click", () => $("log-drawer").classList.add("hidden"));
   $("reveal-toggle").addEventListener("change", () => onSpectateUpdate());
   $("speed-select").addEventListener("change", () => {
     if (session && session.ctrl) session.ctrl.aiOpts.minDelayMs = parseInt($("speed-select").value, 10);

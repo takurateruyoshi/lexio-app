@@ -36,17 +36,6 @@ function seatPositions(n) {
 
 const AVATAR_HUES = [42, 205, 350, 130, 275]; // 席ごとのアバター色
 
-function thoughtHtml(th) {
-  if (!th) return "";
-  const pct = (x) => (x * 100).toFixed(0) + "%";
-  const parts = [`勝率 <b>${pct(th.winProb)}</b>`];
-  if (th.pSurvive !== null && th.pSurvive !== undefined) {
-    parts.push(`この役が通る確率 <b>${pct(th.pSurvive)}</b>`);
-  }
-  parts.push(`期待収支 <b>${th.evScore >= 0 ? "+" : ""}${th.evScore.toFixed(1)}</b>`);
-  return `<div class="th">${parts.join(" ｜ ")}</div>`;
-}
-
 function renderTable(view, showHistory) {
   const tb = $("table3d");
   tb.innerHTML = "";
@@ -65,18 +54,21 @@ function renderTable(view, showHistory) {
     seat.className = `seat pos-${pos[visIdx]}`
       + (p.isTurn ? " turn" : "") + (p.finished ? " finished" : "");
 
-    // --- 着席パネル（アバター + 名前 + 残枚数） ---
-    const info = document.createElement("div");
-    info.className = "seat-info";
-    const hue = AVATAR_HUES[p.index % AVATAR_HUES.length];
-    info.innerHTML = `
-      <div class="avatar" style="--hue:${hue}">
-        <span>${(p.name || "?").slice(0, 1)}</span>
-        <span class="count-badge">×${p.count}</span>
-      </div>
-      <div class="seat-name">${p.name}${p.finished ? " 👑" : ""}
-        <span class="kind-dot ${p.kind === "ai" ? "ai" : "human"}"></span></div>`;
-    seat.appendChild(info);
+    // --- 着席パネル（アバター + 名前 + 残枚数 + 持ち点）。自席はパネルなし ---
+    if (!p.isYou) {
+      const info = document.createElement("div");
+      info.className = "seat-info";
+      const hue = AVATAR_HUES[p.index % AVATAR_HUES.length];
+      info.innerHTML = `
+        <div class="avatar" style="--hue:${hue}">
+          <span>${(p.name || "?").slice(0, 1)}</span>
+          <span class="count-badge">×${p.count}</span>
+        </div>
+        <div class="seat-name">${p.name}${p.finished ? " 👑" : ""}
+          <span class="kind-dot ${p.kind === "ai" ? "ai" : "human"}"></span></div>
+        <div class="seat-points">${p.points}点</div>`;
+      seat.appendChild(info);
+    }
 
     // --- 出牌（現在トリック + 履歴 + パス） ---
     const zone = document.createElement("div");
@@ -126,15 +118,31 @@ function renderTable(view, showHistory) {
   }
 }
 
+// 卓の中央に「現在の場の役」を大きく強調表示
 function renderCenter(view) {
   const c = $("center-info");
-  const situation = view.currentMeld
-    ? `<b>${view.currentMeld.size}枚役</b><span>を上回れ</span>`
-    : `<b>リード</b><span>${view.leader}</span>`;
-  c.innerHTML = `
-    <div class="ci-round">${view.totalRounds > 1 ? `R ${view.round}<i>/</i>${view.totalRounds}` : "一局戦"}</div>
-    <div class="ci-situation">${situation}</div>
-    <div class="ci-last">${view.currentMeld && view.lastPlayer ? view.lastPlayer : ""}</div>`;
+  c.innerHTML = "";
+  const round = document.createElement("div");
+  round.className = "ci-round";
+  round.innerHTML = view.totalRounds > 1
+    ? `R ${view.round}<i>/</i>${view.totalRounds}` : "一局戦";
+  c.appendChild(round);
+
+  if (view.currentMeld) {
+    const meld = document.createElement("div");
+    meld.className = "ci-meld";
+    for (const t of view.currentMeld.tiles) meld.appendChild(tileEl(t, "flat", false));
+    c.appendChild(meld);
+    const who = document.createElement("div");
+    who.className = "ci-last";
+    who.innerHTML = `<b>${view.lastPlayer || "-"}</b> の ${view.currentMeld.size}枚役`;
+    c.appendChild(who);
+  } else {
+    const lead = document.createElement("div");
+    lead.className = "ci-situation";
+    lead.innerHTML = `<b>リード</b><span>${view.leader} が自由に出せます</span>`;
+    c.appendChild(lead);
+  }
 }
 
 export function renderGame(view, opts = {}) {
@@ -160,6 +168,11 @@ export function renderGame(view, opts = {}) {
     ti.textContent = `${view.turnName} が思考中...`;
   }
 
+  // 自分の名前と持ち点（手牌の左上に小さく）
+  const me = view.players.find((p) => p.isYou);
+  $("my-info").innerHTML = me
+    ? `${me.name}　<b>${me.points}点</b>${me.finished ? " 👑" : ""}` : "";
+
   const mh = $("my-hand");
   mh.innerHTML = "";
   for (const t of view.yourHand) {
@@ -171,24 +184,14 @@ export function renderGame(view, opts = {}) {
   $("pass-btn").disabled = !view.canPass;
   $("play-btn").disabled = true;
 
-  const lg = $("log");
-  lg.innerHTML = "";
-  for (const e of view.log) {
-    const row = document.createElement("div");
-    row.className = "row " + (e.kind || "info");
-    row.innerHTML = e.msg + thoughtHtml(e.thought);
-    lg.appendChild(row);
-  }
-  lg.scrollTop = lg.scrollHeight;
-
   if (view.terminal && view.scores) showResult(view);
 }
 
 export function showResult(view) {
   const multi = view.totalRounds > 1;
   const tbl = $("result-table");
-  tbl.innerHTML = `<tr><th>プレイヤー</th><th>残り</th><th>今回</th>${multi ? "<th>累計</th>" : ""}</tr>`;
-  const sortKey = view.matchOver && multi ? "total" : "score";
+  tbl.innerHTML = `<tr><th>プレイヤー</th><th>残り</th><th>今回</th><th>持ち点</th></tr>`;
+  const sortKey = view.matchOver ? "total" : "score";
   const sorted = [...view.scores].sort((a, b) => b[sortKey] - a[sortKey]);
   for (const s of sorted) {
     const fmt = (v) => `${v > 0 ? "+" : ""}${v.toFixed(0)}`;
@@ -197,7 +200,7 @@ export function showResult(view) {
     tbl.innerHTML += `<tr class="${win}"><td>${s.name}${win ? " 👑" : ""}</td>
       <td>${s.count}</td>
       <td class="${cls(s.score)}">${fmt(s.score)}</td>
-      ${multi ? `<td class="${cls(s.total)}">${fmt(s.total)}</td>` : ""}</tr>`;
+      <td>${s.total.toFixed(0)}点</td></tr>`;
   }
   if (view.matchOver) {
     const champ = sorted[0];
@@ -226,7 +229,6 @@ export function showScreen(name) {
     $("result-panel").classList.add("hidden");
     $("result-chip").classList.add("hidden");
     $("net-banner").classList.add("hidden");
-    $("log-drawer").classList.add("hidden");
   }
 }
 

@@ -18,6 +18,7 @@ export function tileJson(t, maxRank) {
 }
 
 const AI_MIN_DELAY_MS = 650;   // AI手番の演出用ディレイ（既定値）
+const INITIAL_POINTS = 64;     // 持ち点の初期値
 
 // AI実行: Web Worker(可能なら) / メインスレッド fallback
 class AiRunner {
@@ -76,7 +77,7 @@ export class GameController {
     this.records = [];             // ラウンドごとの牌譜
     this.totalRounds = Math.max(1, Math.min(99, totalRounds | 0));
     this.round = 1;
-    this.totals = new Array(numPlayers).fill(0);   // 累計チップ
+    this.totals = new Array(numPlayers).fill(INITIAL_POINTS);   // 持ち点（64点開始）
     this.onUpdate = onUpdate || (() => {});
     this.busy = false;             // AI進行中
     this.paused = false;           // 切断待機などの一時停止
@@ -307,7 +308,10 @@ export class GameController {
     const names = this.names();
     const blocked = this.paused || this.matchEnded;
     const myTurn = st.turn === seat && !st.isTerminal() && !blocked;
-    const hand = [...st.hands[seat]].sort((a, b) => tileStrength(a, mr) - tileStrength(b, mr));
+    // 表示は常に強さ昇順（最強が右）
+    const byStrength = (tiles) =>
+      [...tiles].sort((a, b) => tileStrength(a, mr) - tileStrength(b, mr));
+    const hand = byStrength(st.hands[seat]);
     return {
       numPlayers: this.cfg.numPlayers,
       maxRank: mr,
@@ -315,7 +319,7 @@ export class GameController {
       yourHand: hand.map((t) => tileJson(t, mr)),
       currentMeld: st.current === null ? null : {
         text: meldText(st.current),
-        tiles: st.current.tiles.map((t) => tileJson(t, mr)),
+        tiles: byStrength(st.current.tiles).map((t) => tileJson(t, mr)),
         size: st.current.size,
       },
       lastPlayer: st.lastPlayer < 0 ? null : names[st.lastPlayer],
@@ -334,17 +338,18 @@ export class GameController {
       players: this.seats.map((s, i) => ({
         index: i, name: names[i], kind: s.kind,
         count: st.hands[i].length,
+        points: this.totals[i],
         isTurn: st.turn === i && !st.isTerminal(),
         isYou: i === seat,
         passed: st.passed[i] && !st.finished.includes(i),
         finished: st.finished.includes(i),
       })),
       trickPlays: this.trick.map((e) => ({
-        player: e.player, tiles: e.tiles.map((t) => tileJson(t, mr)),
+        player: e.player, tiles: byStrength(e.tiles).map((t) => tileJson(t, mr)),
       })),
       seats: this.seats.map((_, i) => ({
         index: i,
-        history: st.played[i].map((m) => m.tiles.map((t) => tileJson(t, mr))),
+        history: st.played[i].map((m) => byStrength(m.tiles).map((t) => tileJson(t, mr))),
       })),
       log: this.log.slice(-40),
       terminal: st.isTerminal() || this.matchEnded,
@@ -357,8 +362,7 @@ export class GameController {
       })),
       winner: st.finished.length ? names[st.finished[0]] : null,
       allHands: !revealAll ? null : st.hands.map((h) =>
-        [...h].sort((a, b) => tileStrength(a, mr) - tileStrength(b, mr))
-          .map((t) => tileJson(t, mr))),
+        byStrength(h).map((t) => tileJson(t, mr))),
     };
   }
 }

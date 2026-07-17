@@ -26,6 +26,7 @@
     </div>
     <div class="title-footer">
       <button id="rules-btn-title" class="ghost small">ルール</button>
+      <button id="diag-btn" class="ghost small">接続診断</button>
       <button id="export-btn" class="ghost small">牌譜をエクスポート</button>
       <label class="toggle"><input id="collect-toggle" type="checkbox" checked>
         対局データを研究用に送信</label>
@@ -112,7 +113,6 @@
           <option value="650">通常</option>
         </select>
         <label class="toggle"><input id="history-toggle" type="checkbox" checked>履歴</label>
-        <button id="drawer-btn" class="ghost small">ログ</button>
         <button id="rules-btn-game" class="ghost small">ルール</button>
         <button id="end-btn" class="ghost small">終了提案</button>
         <button id="leave-btn" class="ghost small">タイトル</button>
@@ -126,13 +126,8 @@
         <button id="pass-btn" class="ghost" disabled>パス</button>
         <button id="play-btn" class="primary" disabled>出す</button>
       </div>
+      <div id="my-info" class="my-info"></div>
       <div id="my-hand" class="my-hand"></div>
-
-      <aside id="log-drawer" class="drawer hidden">
-        <div class="drawer-head">プレイ履歴 / AIの読み
-          <button id="drawer-close" class="ghost small">閉じる</button></div>
-        <div id="log" class="log"></div>
-      </aside>
 
       <aside id="result-panel" class="result-panel hidden">
         <h2 id="result-title">結果</h2>
@@ -166,7 +161,26 @@
         <button id="join-go-btn" class="primary">参加する</button>
         <button id="join-cancel-btn" class="ghost">やめる</button>
       </div>
+      <p class="hint" id="join-stage"></p>
       <p class="hint" id="join-hint"></p>
+    </div>
+  </div>
+
+  <!-- 接続診断 -->
+  <div id="diag-overlay" class="overlay hidden">
+    <div class="result-card join-card">
+      <h2>接続診断</h2>
+      <p class="lead">オンライン対戦に必要な3つの経路を確認します。</p>
+      <div id="diag-body" class="diag-body">
+        <div class="diag-row"><span id="diag-sig">…</span> 仲介サーバー（部屋の作成・発見）</div>
+        <div class="diag-row"><span id="diag-stun">…</span> STUN（直接接続のためのアドレス取得）</div>
+        <div class="diag-row"><span id="diag-turn">…</span> TURN（NAT越え失敗時の中継）</div>
+      </div>
+      <p class="hint" id="diag-advice"></p>
+      <div class="setup-row center">
+        <button id="diag-run" class="primary">再テスト</button>
+        <button id="diag-close" class="ghost">閉じる</button>
+      </div>
     </div>
   </div>
 

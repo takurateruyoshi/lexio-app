@@ -1,3 +1,16 @@
+# Cloudflare TURN（NAT越え中継）の恒久運用
+
+現在は Cloudflare の公開 speed-test 用 TURN を GitHub Actions
+（.github/workflows/net-refresh.yml）が3時間ごとに取得して配信しています。
+これは非公式利用のため、恒久運用には **Cloudflare Calls TURN**（無料枠 月1TB）を推奨:
+
+1. Cloudflare ダッシュボード → Calls → TURN App を作成し、Key ID と API Token を取得
+2. GitHub リポジトリの Settings → Secrets and variables → Actions に
+   `CF_TURN_KEY_ID` と `CF_TURN_API_TOKEN` を登録
+3. 以後、net-refresh ワークフローが自動的に正式APIへ切り替わります（コード変更不要）
+
+---
+
 # Cloudflare Worker 収集エンドポイント（大規模アクセス用）
 
 対局データ収集を Cloudflare のエッジで受ける構成です。無料枠でも

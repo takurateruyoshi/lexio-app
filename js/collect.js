@@ -5,6 +5,7 @@
 // プレイヤー名は席番号に匿名化される。オプトアウト可（既定ON）。
 "use strict";
 import { openDb } from "./replay.js";
+import { getIceServers } from "./netconfig.js";
 
 const OPTOUT_KEY = "lexio.collect.optout";
 let CFG = { httpUrl: null, p2pId: "lexio-webapp-collect-1", enabled: true };
@@ -116,7 +117,7 @@ function sendP2P(records) {
       ok ? resolve() : reject(err || new Error("p2p send failed"));
     };
     const timer = setTimeout(() => finish(false, new Error("timeout")), 8000);
-    const peer = new Peer();
+    const peer = new Peer({ config: { iceServers: getIceServers() } });
     peer.on("error", (e) => finish(false, e));
     peer.on("open", () => {
       const conn = peer.connect(CFG.p2pId, { reliable: true });

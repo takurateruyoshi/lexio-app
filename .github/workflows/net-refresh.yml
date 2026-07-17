@@ -1,0 +1,62 @@
+name: refresh-turn-credentials
+
+# TURN クレデンシャルの定期更新（model/net.json → 全クライアントに配信）。
+# 既定は Cloudflare の公開 TURN（speed test 用エンドポイント）を利用する。
+# 恒久運用にはリポジトリ Secrets に CF_TURN_KEY_ID / CF_TURN_API_TOKEN を設定すると
+# Cloudflare Calls TURN の正式APIに自動で切り替わる（tools/cloudflare/README.md 参照）。
+on:
+  schedule:
+    - cron: "20 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: net-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch TURN credentials
+        env:
+          CF_TURN_KEY_ID: ${{ secrets.CF_TURN_KEY_ID }}
+          CF_TURN_API_TOKEN: ${{ secrets.CF_TURN_API_TOKEN }}
+        run: |
+          set -e
+          if [ -n "$CF_TURN_KEY_ID" ] && [ -n "$CF_TURN_API_TOKEN" ]; then
+            echo "using Cloudflare Calls TURN API"
+            CREDS=$(curl -s -X POST \
+              "https://rtc.live.cloudflare.com/v1/turn/keys/$CF_TURN_KEY_ID/credentials/generate" \
+              -H "Authorization: Bearer $CF_TURN_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"ttl": 43200}' | jq -c '.iceServers')
+          else
+            echo "using Cloudflare public speed-test TURN"
+            CREDS=$(curl -s https://speed.cloudflare.com/turn-creds \
+              -H "Referer: https://speed.cloudflare.com/" \
+              -H "Origin: https://speed.cloudflare.com")
+          fi
+          if echo "$CREDS" | jq -e '.urls and .username' >/dev/null 2>&1; then
+            jq -n --argjson cf "$CREDS" \
+              '{iceServers: [{urls: "stun:stun.l.google.com:19302"}, $cf]}' > model/net.json
+            echo "net.json updated"
+          else
+            echo "credential fetch failed — keeping existing net.json"
+          fi
+      - name: Commit (if changed)
+        run: |
+          if ! git diff --quiet model/net.json; then
+            git config user.name "lexio-net[bot]"
+            git config user.email "actions@github.com"
+            git add model/net.json
+            git commit -m "net: refresh TURN credentials"
+            git pull --rebase origin main
+            git push
+          else
+            echo "no change"
+          fi

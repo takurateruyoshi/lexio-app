@@ -2,12 +2,14 @@
 // リロード/切断は「待機式」: AI代打はせず、一時停止して席トークンでの復帰を待つ。
 "use strict";
 import { GameController } from "./game.js";
+import { getIceServers } from "./netconfig.js";
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // 紛らわしい文字を除外
 const PROTOCOL_VERSION = 2;
 const PING_INTERVAL_MS = 5000;
 const GUEST_RETRY_MS = 2500;
 const GUEST_RETRY_MAX = 72;          // ≈3分
+const CONNECT_TIMEOUT_MS = 15000;    // 初回接続の見切り
 export const STORE_HOST = "lexio.host.v1";
 export const STORE_GUEST = "lexio.guest.v1";
 
@@ -21,8 +23,10 @@ const randomToken = () =>
 
 const peerId = (code) => "lexio-webapp-" + code.toLowerCase();
 
-function newPeer(id) {
-  return id ? new Peer(id) : new Peer(); // vendor/peerjs.min.js がグローバル Peer を定義
+export function newPeer(id) {
+  // vendor/peerjs.min.js がグローバル Peer を定義。TURN/STUN は netconfig から。
+  const opts = { config: { iceServers: getIceServers() } };
+  return id ? new Peer(id, opts) : new Peer(opts);
 }
 
 // ---------------------------------------------------------------------------
@@ -380,21 +384,69 @@ export class GuestSession {
     } catch { return null; }
   }
 
+  _progress(msg) { this.cb.onProgress && this.cb.onProgress(msg); }
+
+  _fail(msg) {
+    clearTimeout(this._connTimer);
+    if (this.stopped) return;
+    if (this.started) { this._scheduleRetry(); return; }
+    this.cb.onError(msg);
+    try { this.peer && this.peer.destroy(); } catch {}
+  }
+
   _connect() {
     if (this.stopped) return;
     try { this.peer && this.peer.destroy(); } catch {}
     this.peer = newPeer();
     this.alive = false;
+    this._stage = "signaling";
+    this._progress("仲介サーバーに接続中…");
+    // 初回接続の見切りタイマー（段階に応じた正確なメッセージ）
+    clearTimeout(this._connTimer);
+    this._connTimer = setTimeout(() => {
+      if (this.stopped || this.alive) return;
+      if (this._stage === "signaling") {
+        this._fail("仲介サーバーに接続できません。ネットワークやファイアウォールをご確認ください");
+      } else {
+        this._fail("ホストとの直接接続に失敗しました（NAT越え失敗の可能性）。" +
+                   "タイトルの「接続診断」で TURN の状態を確認してください");
+      }
+    }, CONNECT_TIMEOUT_MS);
+
     this.peer.on("error", (e) => {
       if (this.stopped) return;
       if (this.started) { this._scheduleRetry(); return; }
-      if (e.type === "peer-unavailable") this.cb.onError("その部屋コードは見つかりません");
-      else this.cb.onError("接続サーバーに到達できません: " + e.type);
+      if (e.type === "peer-unavailable") {
+        this._fail("その部屋は見つかりません（コードの誤り、またはホストが部屋を閉じました）");
+      } else if (["network", "server-error", "socket-error", "socket-closed"].includes(e.type)) {
+        this._fail("仲介サーバーに到達できません（" + e.type + "）。回線を変えて再度お試しください");
+      } else {
+        this._fail("接続エラー: " + e.type);
+      }
     });
+
     this.peer.on("open", () => {
+      this._stage = "connecting";
+      this._progress("ホストと接続中…（NAT越え）");
       this.conn = this.peer.connect(peerId(this.code), { reliable: true });
+      // ICE失敗の検知（peerConnection はネゴシエーション開始後に生える）
+      const watchIce = setInterval(() => {
+        const pc = this.conn && this.conn.peerConnection;
+        if (!pc) return;
+        clearInterval(watchIce);
+        pc.addEventListener("iceconnectionstatechange", () => {
+          if (pc.iceConnectionState === "failed" && !this.alive) {
+            this._fail("ホストとの直接接続に失敗しました（NAT越え失敗）。" +
+                       "TURN中継にも到達できていません。「接続診断」をご確認ください");
+          }
+        });
+      }, 300);
       this.conn.on("open", () => {
+        clearTimeout(this._connTimer);
+        clearInterval(watchIce);
         this.alive = true;
+        this._stage = "open";
+        this._progress(null);
         this.attempt = 0;
         const hello = { t: "hello", name: this.name, protocolVersion: PROTOCOL_VERSION };
         if (this.token !== null) hello.rejoin = { seat: this.seat, token: this.token };
@@ -458,6 +510,7 @@ export class GuestSession {
     this.stopped = true;
     clearInterval(this._pingTimer);
     clearTimeout(this._retryTimer);
+    clearTimeout(this._connTimer);
     try { sessionStorage.removeItem(STORE_GUEST); } catch {}
     try { this.peer && this.peer.destroy(); } catch {}
   }
