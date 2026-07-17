@@ -10,29 +10,32 @@
 <div id="app">
 
   <!-- タイトル: 続きから or 対戦 -->
-  <section id="screen-title" class="panel title-panel">
-    <h1>レキシオ <span class="sub">オンライン P2P 対戦</span></h1>
-    <p class="lead">麻雀×ポーカー×大富豪。友達と、AIと、ブラウザだけで。</p>
+  <section id="screen-title" class="title-screen">
+    <h1 class="logo"><span class="lx">Lex</span><span class="lx-i">i</span><span class="lx">o</span>
+      <span class="neo">Neo</span></h1>
     <div class="title-actions">
-      <button id="resume-btn" class="primary big hidden">⏸ 続きから</button>
       <button id="battle-btn" class="primary big">▶ 対戦する</button>
+      <button id="resume-btn" class="primary alt big hidden">⏸ 続きから</button>
     </div>
-    <div class="setup-row">
+    <div class="title-sub">
+      <button id="tutorial-btn" class="ghost">📖 チュートリアル</button>
       <span class="join-group">
         <input id="join-code" type="text" placeholder="部屋コード" maxlength="6">
-        <button id="join-room-btn" class="ghost">コードで参加</button>
+        <button id="join-room-btn" class="ghost">参加</button>
       </span>
-      <button id="tutorial-btn" class="ghost">📖 チュートリアル</button>
     </div>
-    <div class="title-footer">
-      <button id="rules-btn-title" class="ghost small">ルール</button>
-      <button id="diag-btn" class="ghost small">接続診断</button>
-      <button id="export-btn" class="ghost small">牌譜をエクスポート</button>
-      <label class="toggle"><input id="collect-toggle" type="checkbox" checked>
-        対局データを研究用に送信</label>
-    </div>
-    <p class="hint" id="model-info"></p>
     <p class="hint" id="title-hint"></p>
+    <details class="title-more">
+      <summary>その他（ルール・診断・研究）</summary>
+      <div class="title-footer">
+        <button id="rules-btn-title" class="ghost small">ルール</button>
+        <button id="diag-btn" class="ghost small">接続診断</button>
+        <button id="export-btn" class="ghost small">牌譜をエクスポート</button>
+        <label class="toggle"><input id="collect-toggle" type="checkbox" checked>
+          対局データを研究用に送信</label>
+      </div>
+      <p class="hint" id="model-info"></p>
+    </details>
   </section>
 
   <!-- 対戦設定 -->
@@ -123,7 +126,7 @@
         </select>
         <label class="toggle"><input id="history-toggle" type="checkbox" checked>履歴</label>
         <button id="rules-btn-game" class="ghost small">ルール</button>
-        <button id="end-btn" class="ghost small">終了提案</button>
+        <button id="prev-btn" class="ghost small">前局の結果</button>
         <button id="leave-btn" class="ghost small">タイトル</button>
       </div>
 

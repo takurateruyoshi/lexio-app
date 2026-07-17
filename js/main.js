@@ -3,7 +3,7 @@
 "use strict";
 import { GameController } from "./game.js";
 import { HostSession, GuestSession, STORE_GUEST } from "./net.js";
-import { $, renderGame, setActionMessage, selectedTiles, showScreen, buildRulesContent } from "./ui.js";
+import { $, renderGame, setActionMessage, selectedTiles, showScreen, buildRulesContent, showPrevResult } from "./ui.js";
 import { loadModel, getTheta } from "./model.js";
 import { saveGameRecord, exportRecordsToFile, countRecords, annotateBlocking } from "./replay.js";
 import { Tutorial } from "./tutorial.js";
@@ -356,7 +356,6 @@ function renderLobby(seats) {
 // ============================== 観戦 ==============================
 function toggleSpectateControls(on) {
   document.querySelectorAll(".spectate-only").forEach((e) => e.classList.toggle("hidden", !on));
-  $("end-btn").classList.toggle("hidden", on);
 }
 
 function spectateAiOpts() {
@@ -635,7 +634,10 @@ window.addEventListener("DOMContentLoaded", () => {
   // ゲーム内
   $("play-btn").addEventListener("click", doPlay);
   $("pass-btn").addEventListener("click", doPass);
-  $("end-btn").addEventListener("click", proposeEnd);
+  $("prev-btn").addEventListener("click", () => {
+    if (lastView && lastView.prevResult) showPrevResult(lastView.prevResult);
+    else setActionMessage("まだ前局がありません");
+  });
   $("leave-btn").addEventListener("click", () => {
     if (confirm("ゲームを離れてタイトルに戻りますか？")) leaveSession();
   });

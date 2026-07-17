@@ -177,6 +177,8 @@ export function renderGame(view, opts = {}) {
 }
 
 export function showResult(view) {
+  $("result-again").classList.remove("hidden");
+  $("result-title-btn").classList.remove("hidden");
   const multi = view.totalRounds > 1;
   const tbl = $("result-table");
   tbl.innerHTML = `<tr><th>プレイヤー</th><th>残り</th><th>今回</th><th>持ち点</th></tr>`;
@@ -202,6 +204,27 @@ export function showResult(view) {
     $("result-round").textContent = multi ? `ラウンド ${view.round} / ${view.totalRounds}` : "";
   }
   $("result-again").textContent = view.matchOver ? "もう一局" : "次のラウンドへ";
+  $("result-panel").classList.remove("hidden");
+  $("result-chip").classList.add("hidden");
+}
+
+// 一局前の結果を結果パネルに表示（対局は継続中・進行ボタンは隠す）
+export function showPrevResult(prev) {
+  const tbl = $("result-table");
+  tbl.innerHTML = `<tr><th>プレイヤー</th><th>今回</th><th>持ち点</th></tr>`;
+  const sorted = [...prev.scores].sort((a, b) => b.score - a.score);
+  for (const s of sorted) {
+    const fmt = (v) => `${v > 0 ? "+" : ""}${v.toFixed(0)}`;
+    const cls = (v) => (v > 0 ? "pos" : (v < 0 ? "neg" : ""));
+    const win = s.name === prev.winner ? "win" : "";
+    tbl.innerHTML += `<tr class="${win}"><td>${s.name}${win ? " 👑" : ""}</td>
+      <td class="${cls(s.score)}">${fmt(s.score)}</td>
+      <td>${s.total === null ? "-" : s.total.toFixed(0) + "点"}</td></tr>`;
+  }
+  $("result-title").textContent = `前局の結果（R ${prev.round}）`;
+  $("result-round").textContent = prev.winner ? `上がり: ${prev.winner}` : "";
+  $("result-again").classList.add("hidden");
+  $("result-title-btn").classList.add("hidden");
   $("result-panel").classList.remove("hidden");
   $("result-chip").classList.add("hidden");
 }
@@ -233,22 +256,37 @@ const OK = `<span class="mark-ok">✓</span>`;
 const NG = `<span class="mark-ng">✗</span>`;
 const ARROW = `<span class="rule-sep">→</span>`;
 
+// ルール画面とチュートリアルで共有する「切り出しスニペット」
+export const RULE_SNIPPETS = {
+  strength: `<div class="rule-row">${rt(3,0)}${LT}${rt(4,0)}
+    <span class="rule-ellipsis">…</span>${LT}${rt(9,0)}${LT}${rt(1,0)}${LT}${rt(2,0)}</div>`,
+  suits: `<div class="rule-row">${rt(7,0)}${LT}${rt(7,1)}${LT}${rt(7,2)}${LT}${rt(7,3)}</div>`,
+  pair: `<div class="rule-row"><span class="rule-label">ペア</span>${meldHtml([[8,1],[8,3]])}</div>`,
+  pass: `<div class="rule-row tut-center"><span class="tut-btn">パス</span>${ARROW}
+    ${rt(9,2)}${ARROW}<span class="tut-ok">また出せる</span></div>`,
+  one: `<div class="rule-row">${OK}${meldHtml([[6,0],[7,1],[8,2],[9,3],[1,0]])}
+    <span class="rule-note">1 は 9 より強い</span></div>`,
+  two: `<div class="rule-row">${rt(2,0)}${ARROW}<span class="tut-zero">最強</span>
+    <span class="rule-note">ただし残すと支払い ×2</span></div>`,
+  five: `<div class="rule-row"><span class="rule-label">ストレート</span>
+    ${meldHtml([[5,2],[6,2],[7,0],[8,0],[9,2]])}</div>`,
+  settle: `<div class="rule-row tut-center"><span class="tut-zero">0枚</span> 👑
+    <span class="rule-sep">vs</span> 残り1枚 ${ARROW}<span class="tut-ok">+1点</span></div>`,
+};
+
 export function buildRulesContent() {
   const body = $("rules-body");
   body.innerHTML = `
     <h3>牌の強さ（弱 → 強）</h3>
-    <div class="rule-row">
-      ${rt(3,0)}${LT}${rt(4,0)}${LT}${rt(5,0)}
-      <span class="rule-ellipsis">…</span>${LT}${rt(9,0)}${LT}${rt(1,0)}${LT}${rt(2,0)}
-    </div>
-    <div class="rule-row">${rt(7,0)}${LT}${rt(7,1)}${LT}${rt(7,2)}${LT}${rt(7,3)}</div>
+    ${RULE_SNIPPETS.strength}
+    ${RULE_SNIPPETS.suits}
 
     <h3>役（同じ枚数同士でのみ勝負）</h3>
-    <div class="rule-row"><span class="rule-label">単騎</span>${rt(8,2)}</div>
-    <div class="rule-row"><span class="rule-label">ペア</span>${meldHtml([[8,1],[8,3]])}</div>
-    <div class="rule-row"><span class="rule-label">トリプル</span>${meldHtml([[8,0],[8,1],[8,2]])}</div>
+    <div class="rule-row"><span class="rule-label">単騎</span>${rt(8,2)}
+      <span class="rule-label" style="margin-left:18px">ペア</span>${meldHtml([[8,1],[8,3]])}
+      <span class="rule-label" style="margin-left:18px">トリプル</span>${meldHtml([[8,0],[8,1],[8,2]])}</div>
 
-    <h3>5枚役の強さ（弱 → 強）</h3>
+    <h3>5枚役（弱 → 強）</h3>
     <div class="rule-row"><span class="rule-label">① ストレート</span>
       ${meldHtml([[4,0],[5,1],[6,2],[7,0],[8,3]])}</div>
     <div class="rule-row"><span class="rule-label">② フラッシュ</span>
@@ -262,28 +300,19 @@ export function buildRulesContent() {
 
     <h3>1 と 2 の使い方（ストレート）</h3>
     <div class="rule-row">${OK}${meldHtml([[1,0],[2,1],[3,2],[4,3],[5,0]])}</div>
-    <div class="rule-row">${OK}${meldHtml([[2,0],[3,1],[4,2],[5,3],[6,0]])}</div>
     <div class="rule-row">${OK}${meldHtml([[6,0],[7,1],[8,2],[9,3],[1,0]])}</div>
-    <div class="rule-row">${OK}${meldHtml([[10,0],[11,1],[12,2],[13,3],[1,0]])}</div>
-    <div class="rule-row">${OK}${meldHtml([[12,0],[13,1],[14,2],[15,3],[1,0]])}</div>
     <div class="rule-row">${NG}${meldHtml([[7,0],[8,1],[9,2],[1,3],[2,0]])}</div>
-    <div class="rule-row">${NG}${meldHtml([[11,0],[12,1],[13,2],[1,3],[2,0]])}</div>
-    <div class="rule-row">${NG}${meldHtml([[13,0],[14,1],[15,2],[1,3],[2,0]])}</div>
     <div class="tut-caption">1 は頭でも最後でもOK ・ 2 は最後に置けない</div>
 
     <h3>進行</h3>
     <div class="rule-row tut-center">${rt(5,2)}${ARROW}${rt(8,3)}${ARROW}
-      <span class="tut-btn">パス</span>${ARROW}${rt(2,0)}</div>
-    <div class="tut-caption">同じ枚数でより強く ・ パスしても次はまた出せる</div>
-    <div class="rule-row tut-center"><span class="tut-btn">パス</span>
-      <span class="tut-btn">パス</span>${ARROW}<span class="tut-ok">場が流れる → 最後に出した人がリード</span></div>
+      <span class="tut-btn">パス</span>${ARROW}${rt(2,0)}${ARROW}
+      <span class="tut-ok">全員パスで場が流れる</span></div>
 
     <h3>精算</h3>
     <div class="rule-row tut-center"><span class="tut-zero">0枚</span> 👑
       <span class="rule-sep">vs</span>${meldHtml([[5,0],[9,1],[13,2]])}${ARROW}
-      <span class="tut-zero">−3点</span></div>
-    <div class="rule-row tut-center">${rt(2,0)}${ARROW}<span class="tut-zero">×2</span>
-      　${meldHtml([[2,0],[2,1]])}${ARROW}<span class="tut-zero">×4</span></div>
-    <div class="tut-caption">誰かが出し切ったら即終了 ・ 残り枚数の差を支払う（残った2で倍増）</div>
+      <span class="tut-zero">−3点</span>
+      　${rt(2,0)}${ARROW}<span class="tut-zero">×2</span></div>
   `;
 }

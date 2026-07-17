@@ -1,53 +1,53 @@
-// tutorial.js — 誘導型チュートリアル（固定シナリオの実対局で学ぶ）
-// 毎回同じ配牌・同じ相手スクリプト。各ステップで選べる手は一通りだけ。
+// tutorial.js — 誘導型チュートリアル（固定シナリオの実対局・最後は自分が勝つ）
+// 各ステップにルール画面から切り出したスニペットを表示し、ルール＝実践を結びつける。
 "use strict";
 import { GameController } from "./game.js";
-import { rt } from "./ui.js";
+import { rt, RULE_SNIPPETS } from "./ui.js";
 import { makeTile as T, tileRank, tileSuit } from "./engine.js";
 
-// ---- 固定シナリオ（2人戦・9ランク・12枚） ----
+// ---- 固定シナリオ（2人戦・9ランク・12枚・あなたが勝つ） ----
 const MY_HAND = [
-  T(3,0), T(3,3),        // ☁3 ☀3   … 単騎とスートの強弱
-  T(5,0), T(5,3),        // 5ペア
-  T(1,2),                // ☾1      … 1は数字より強い
-  T(4,0), T(4,1),        // 4ペア
-  T(6,0), T(6,1), T(8,0), T(8,1), T(9,0),   // 残り（学習後に残る牌）
+  T(3,0), T(3,3),                         // ☁3 ☀3
+  T(5,0), T(5,1),                         // 5ペア
+  T(1,2),                                 // ☾1
+  T(4,0), T(4,1),                         // 4ペア
+  T(5,2), T(6,2), T(7,0), T(8,0), T(9,2), // ストレート 5-6-7-8-9（最後に出し切る）
 ];
 const OPP_HAND = [
-  T(3,2),                // ☾3
-  T(9,1), T(9,2),        // 9ペア
-  T(7,1),                // ★7
-  T(2,0), T(2,1),        // 2ペア
-  T(3,1), T(4,2), T(5,2), T(6,2), T(7,0),   // ストレート 3-4-5-6-7
-  T(8,3),                // ☀8（最後に出し切る）
+  T(3,2),                                 // ☾3
+  T(9,1), T(9,3),                         // 9ペア
+  T(7,1),                                 // ★7
+  T(2,0), T(2,1),                         // 2ペア
+  T(3,1), T(4,2), T(5,3), T(6,0), T(7,3), // ストレート 3-4-5-6-7
+  T(8,3),                                 // ☀8（出さずに残る → あなたの勝ち）
 ];
 
-// who:0=あなた / 1=先生。あなたの手番には text と期待手が付く。
+// who:0=あなた / 1=先生
 const STEPS = [
   { who: 0, type: "play", tiles: [T(3,0)],
-    text: "最弱の牌からスタート" },
+    text: "最弱の牌からスタート", snippet: RULE_SNIPPETS.strength },
   { who: 1, type: "play", tiles: [T(3,2)] },
   { who: 0, type: "play", tiles: [T(3,3)],
-    text: "同じ3でもスートで勝てる（☀は☾より強い）" },
+    text: "同じ3でもスートで勝てる", snippet: RULE_SNIPPETS.suits },
   { who: 1, type: "pass" },
-  { who: 0, type: "play", tiles: [T(5,0), T(5,3)],
-    text: "リードは自由 — 2枚選んでペアを出そう" },
-  { who: 1, type: "play", tiles: [T(9,1), T(9,2)] },
+  { who: 0, type: "play", tiles: [T(5,0), T(5,1)],
+    text: "2枚選んでペアを出そう", snippet: RULE_SNIPPETS.pair },
+  { who: 1, type: "play", tiles: [T(9,1), T(9,3)] },
   { who: 0, type: "pass",
-    text: "9のペアには勝てない…でもパスは抜けじゃない" },
+    text: "勝てない時はパス。抜けじゃない", snippet: RULE_SNIPPETS.pass },
   { who: 1, type: "play", tiles: [T(7,1)] },
   { who: 0, type: "play", tiles: [T(1,2)],
-    text: "1 は 9 よりも強い特別な牌" },
+    text: "1 は数字より強い", snippet: RULE_SNIPPETS.one },
   { who: 1, type: "pass" },
   { who: 0, type: "play", tiles: [T(4,0), T(4,1)],
-    text: "場が流れたら自由にリード" },
+    text: "場が流れたら自由にリード", snippet: RULE_SNIPPETS.pair },
   { who: 1, type: "play", tiles: [T(2,0), T(2,1)] },
   { who: 0, type: "pass",
-    text: "2 は最強。無理せずパス" },
-  { who: 1, type: "play", tiles: [T(3,1), T(4,2), T(5,2), T(6,2), T(7,0)] },
-  { who: 0, type: "pass",
-    text: "5枚役には5枚役でしか勝てない" },
-  { who: 1, type: "play", tiles: [T(8,3)] },   // 先生が出し切って終了
+    text: "2 は最強。無理せずパス", snippet: RULE_SNIPPETS.two },
+  { who: 1, type: "play", tiles: [T(3,1), T(4,2), T(5,3), T(6,0), T(7,3)] },
+  { who: 0, type: "play", tiles: [T(5,2), T(6,2), T(7,0), T(8,0), T(9,2)],
+    text: "5枚役には5枚役！ 上のストレートで勝負", snippet: RULE_SNIPPETS.five },
+  // ↑ これで手札0枚 = あなたの勝ち！
 ];
 
 const eqSet = (a, b) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
@@ -69,7 +69,6 @@ export class Tutorial {
   step() { return STEPS[this.idx] || null; }
   done() { return this.ctrl.state.isTerminal(); }
 
-  // 選択を許可する牌（期待手のみ）
   selectable() {
     const s = this.step();
     return new Set(s && s.who === 0 && s.type === "play" ? s.tiles : []);
@@ -82,13 +81,13 @@ export class Tutorial {
 
   instructionHtml() {
     if (this.done()) {
-      return "🎉 チュートリアル完了！ 精算は「残り枚数 × 2の倍率」— 本番で会いましょう";
+      return `🏆 <b>あなたの勝ち！</b> 先生の残り1枚ぶんチップを獲得 — 本番へどうぞ ${RULE_SNIPPETS.settle}`;
     }
     const s = this.step();
     if (!s) return "";
     if (s.who === 1) return "先生の番…";
-    if (s.type === "pass") return `${s.text}　→ <b>パス</b>`;
-    return `${s.text}　${tilesHtml(s.tiles)}`;
+    const head = s.type === "pass" ? `${s.text}　→ <b>パス</b>` : `${s.text}`;
+    return `${head}${s.snippet ? `<div class="tut-snippet">${s.snippet}</div>` : ""}`;
   }
 
   tryPlay(tiles) {
@@ -124,6 +123,6 @@ export class Tutorial {
         else this.ctrl.play(1, cur.tiles);
       }, 1100);
     }
-    this.onRender(this);   // 自身を渡す（呼び出し側の変数初期化順に依存しない）
+    this.onRender(this);
   }
 }

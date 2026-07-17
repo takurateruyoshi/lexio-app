@@ -69,11 +69,41 @@ button.small{padding:6px 12px;font-size:12px}
 .hint{color:var(--muted);font-size:12px;margin-top:10px;min-height:16px}
 
 /* ============ タイトル / 対戦設定 ============ */
-.title-panel{max-width:640px;margin:6vh auto 0}
-.title-actions{display:flex;gap:14px;margin:22px 0 10px;flex-wrap:wrap}
-button.big{padding:18px 34px;font-size:18px;border-radius:14px}
-.title-footer{display:flex;gap:12px;align-items:center;flex-wrap:wrap;
-  margin-top:22px;padding-top:14px;border-top:1px solid var(--line)}
+.title-screen{
+  max-width:520px;margin:10vh auto 0;text-align:center;
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+}
+.logo{font-size:64px;font-weight:900;letter-spacing:.02em;margin:0 0 18px;
+  display:flex;align-items:baseline;justify-content:center;gap:2px}
+.logo .lx{color:#fff}
+.logo .lx-i{color:#e0413f;position:relative;margin:0 1px}
+.logo .lx-i::before{
+  content:"♛";position:absolute;top:-0.48em;left:50%;transform:translateX(-50%);
+  font-size:0.32em;color:var(--gold);
+}
+.logo .neo{
+  color:#3b82d8;font-style:italic;font-size:26px;font-weight:800;
+  margin-left:6px;text-shadow:0 1px 0 #fff,0 -1px 0 #fff,1px 0 0 #fff,-1px 0 0 #fff,
+    2px 2px 4px rgba(0,0,0,.6);
+  transform:rotate(-6deg);
+}
+.title-actions{display:flex;gap:14px;margin:4px 0 6px;flex-wrap:wrap;justify-content:center}
+button.big{padding:18px 38px;font-size:19px;border-radius:14px}
+.title-sub{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center}
+.title-more{margin-top:26px;width:100%;color:var(--muted)}
+.title-more summary{cursor:pointer;font-size:12px;letter-spacing:.06em;
+  color:var(--muted);list-style-position:inside}
+.title-more[open] summary{margin-bottom:10px}
+.title-footer{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center;
+  padding-top:10px;border-top:1px solid var(--line)}
+
+/* チュートリアルのルール切り出し表示 */
+.tut-snippet{margin-top:8px;padding:6px 10px;background:rgba(0,0,0,.35);
+  border:1px dashed rgba(233,196,106,.4);border-radius:10px}
+.tut-snippet .rule-row{margin:2px 0}
+.tut-snippet .tile.rtile{--w:26px;--h:36px}
+.tut-snippet .tile.rtile .num{font-size:13px}
+.net-banner{white-space:normal;flex-direction:column;max-width:min(92%,640px)}
 .setup-block{margin-top:18px}
 .setup-label{font-size:12px;color:var(--muted);margin-bottom:8px}
 .choice-row{display:flex;gap:8px;flex-wrap:wrap}

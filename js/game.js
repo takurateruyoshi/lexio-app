@@ -292,6 +292,7 @@ export class GameController {
       this._note(`ラウンド ${this.round}/${this.totalRounds} 終了。スコアを精算します。`, "info");
       this._rec.scores = [...this.scores];
       this._rec.finished = [...this.state.finished];
+      this._rec.totalsAfter = [...this.totals];
       this.records.push(this._rec);
     }
     this._armTurnTimer();
@@ -315,7 +316,26 @@ export class GameController {
       const { moveTiles, thought } = await this.ai.choose(this.state, p, belief, chooseOpts);
       const wait = (this.aiOpts.minDelayMs ?? AI_MIN_DELAY_MS) - (Date.now() - t0);
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-      const meld = moveTiles ? classify(moveTiles, this.cfg.maxRank) : null;
+      let meld = moveTiles ? classify(moveTiles, this.cfg.maxRank) : null;
+      // セーフガード: AIの手を適用前に再検証（キャッシュ不整合等での違反手を遮断）
+      if (meld !== null) {
+        const hand = this.state.hands[p];
+        const legal = meld.tiles.every((t) => hand.includes(t)) && beats(meld, this.state.current);
+        if (!legal) {
+          console.warn("AI move rejected as illegal — falling back", moveTiles);
+          if (this.state.current !== null) {
+            meld = null;                               // 応手は安全にパス
+          } else {
+            let best = null;                           // リードは最弱の合法手
+            for (const m of legalMoves(hand, null, this.cfg)) {
+              if (m === null) continue;
+              if (best === null || m.size < best.size ||
+                  (m.size === best.size && compareKeys(m.key, best.key) < 0)) best = m;
+            }
+            meld = best;
+          }
+        }
+      }
       this._lastThought = thought && !thought.forced ? thought : null;
       this._applyMove(p, meld);
       this.onUpdate();
@@ -392,6 +412,20 @@ export class GameController {
       pausedReason: this.pausedReason,
       turnLimit: this.turnLimitSec,
       turnDeadline: this._turnDeadline,
+      prevResult: (() => {   // 一局前の結果（対局中の振り返り用）
+        const done = this.records.filter((r) => r.scores !== null);
+        const prev = st.isTerminal() ? done[done.length - 2] : done[done.length - 1];
+        if (!prev) return null;
+        return {
+          round: prev.round,
+          winner: prev.finished && prev.finished.length ? names[prev.finished[0]] : null,
+          scores: prev.seats.map((s, i) => ({
+            name: names[i] ?? s.name,
+            score: prev.scores[i],
+            total: prev.totalsAfter ? prev.totalsAfter[i] : null,
+          })),
+        };
+      })(),
       players: this.seats.map((s, i) => ({
         index: i, name: names[i], kind: s.kind,
         count: st.hands[i].length,
