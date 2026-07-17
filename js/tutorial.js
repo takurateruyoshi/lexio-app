@@ -1,100 +1,129 @@
-// tutorial.js — ステップ式チュートリアル + 練習対局のヒント文言
+// tutorial.js — 誘導型チュートリアル（固定シナリオの実対局で学ぶ）
+// 毎回同じ配牌・同じ相手スクリプト。各ステップで選べる手は一通りだけ。
 "use strict";
-import { $, rt, meldHtml } from "./ui.js";
+import { GameController } from "./game.js";
+import { rt } from "./ui.js";
+import { makeTile as T, tileRank, tileSuit } from "./engine.js";
 
-const GT = `<span class="rule-sep">→</span>`;
-const LT2 = `<span class="rule-sep">&lt;</span>`;
-const STEPS = [
-  {
-    title: "目的",
-    html: `<div class="tut-big">手札を最初に出し切ったら勝ち 🏆</div>
-      <div class="rule-row tut-center">${meldHtml([[3,0],[7,1],[9,2],[1,0],[2,3]])}
-      ${GT}<span class="tut-zero">0枚</span> 👑</div>`,
-  },
-  {
-    title: "牌の強さ",
-    html: `<div class="rule-row tut-center">
-      ${rt(3,0)}${LT2}${rt(4,0)}<span class="rule-ellipsis">…</span>${LT2}${rt(9,0)}${LT2}${rt(1,0)}${LT2}${rt(2,0)}</div>
-      <div class="tut-caption">3 が最弱 ・ 2 が最強</div>
-      <div class="rule-row tut-center">${rt(7,0)}${LT2}${rt(7,1)}${LT2}${rt(7,2)}${LT2}${rt(7,3)}</div>`,
-  },
-  {
-    title: "役",
-    html: `<div class="rule-row"><span class="rule-label">単騎</span>${rt(8,2)}</div>
-      <div class="rule-row"><span class="rule-label">ペア</span>${meldHtml([[8,1],[8,3]])}</div>
-      <div class="rule-row"><span class="rule-label">トリプル</span>${meldHtml([[8,0],[8,1],[8,2]])}</div>
-      <div class="rule-row"><span class="rule-label">5枚役</span>${meldHtml([[4,0],[5,1],[6,2],[7,0],[8,3]])}</div>
-      <div class="tut-caption">同じ枚数同士でだけ勝負</div>`,
-  },
-  {
-    title: "操作",
-    html: `<div class="tut-big">タップで選ぶ ${GT} <span class="tut-btn gold">出す</span></div>
-      <div class="tut-big">出せない時は <span class="tut-btn">パス</span></div>
-      <div class="tut-caption">自分の番になると手牌が光ります</div>`,
-  },
-  {
-    title: "場の流れ",
-    html: `<div class="rule-row tut-center">${rt(5,0)}${LT2}${rt(9,2)}${LT2}${rt(2,3)}</div>
-      <div class="tut-caption">同じ枚数で、より強く</div>
-      <div class="rule-row tut-center"><span class="tut-btn">パス</span>${GT}
-      ${rt(9,2)}${GT}<span class="tut-ok">また出せる</span></div>
-      <div class="tut-caption">全員パスで場が流れる</div>`,
-  },
-  {
-    title: "精算",
-    html: `<div class="rule-row tut-center">残り ${meldHtml([[5,0],[9,1]])} ${GT}
-      <span class="tut-zero">−2点</span></div>
-      <div class="rule-row tut-center">${rt(2,0)} が残ると <span class="tut-zero">×2</span>
-      　${meldHtml([[2,0],[2,1]])} ${GT} <span class="tut-zero">×4</span></div>
-      <div class="tut-caption">それでは練習対局へ！</div>`,
-  },
+// ---- 固定シナリオ（2人戦・9ランク・12枚） ----
+const MY_HAND = [
+  T(3,0), T(3,3),        // ☁3 ☀3   … 単騎とスートの強弱
+  T(5,0), T(5,3),        // 5ペア
+  T(1,2),                // ☾1      … 1は数字より強い
+  T(4,0), T(4,1),        // 4ペア
+  T(6,0), T(6,1), T(8,0), T(8,1), T(9,0),   // 残り（学習後に残る牌）
+];
+const OPP_HAND = [
+  T(3,2),                // ☾3
+  T(9,1), T(9,2),        // 9ペア
+  T(7,1),                // ★7
+  T(2,0), T(2,1),        // 2ペア
+  T(3,1), T(4,2), T(5,2), T(6,2), T(7,0),   // ストレート 3-4-5-6-7
+  T(8,3),                // ☀8（最後に出し切る）
 ];
 
-let page = 0;
-let onPractice = null;
+// who:0=あなた / 1=先生。あなたの手番には text と期待手が付く。
+const STEPS = [
+  { who: 0, type: "play", tiles: [T(3,0)],
+    text: "最弱の牌からスタート" },
+  { who: 1, type: "play", tiles: [T(3,2)] },
+  { who: 0, type: "play", tiles: [T(3,3)],
+    text: "同じ3でもスートで勝てる（☀は☾より強い）" },
+  { who: 1, type: "pass" },
+  { who: 0, type: "play", tiles: [T(5,0), T(5,3)],
+    text: "リードは自由 — 2枚選んでペアを出そう" },
+  { who: 1, type: "play", tiles: [T(9,1), T(9,2)] },
+  { who: 0, type: "pass",
+    text: "9のペアには勝てない…でもパスは抜けじゃない" },
+  { who: 1, type: "play", tiles: [T(7,1)] },
+  { who: 0, type: "play", tiles: [T(1,2)],
+    text: "1 は 9 よりも強い特別な牌" },
+  { who: 1, type: "pass" },
+  { who: 0, type: "play", tiles: [T(4,0), T(4,1)],
+    text: "場が流れたら自由にリード" },
+  { who: 1, type: "play", tiles: [T(2,0), T(2,1)] },
+  { who: 0, type: "pass",
+    text: "2 は最強。無理せずパス" },
+  { who: 1, type: "play", tiles: [T(3,1), T(4,2), T(5,2), T(6,2), T(7,0)] },
+  { who: 0, type: "pass",
+    text: "5枚役には5枚役でしか勝てない" },
+  { who: 1, type: "play", tiles: [T(8,3)] },   // 先生が出し切って終了
+];
 
-function render() {
-  $("tutorial-title").textContent = STEPS[page].title;
-  $("tutorial-body").innerHTML = STEPS[page].html;
-  $("tutorial-step").textContent = `${page + 1} / ${STEPS.length}`;
-  $("tutorial-prev").disabled = page === 0;
-  $("tutorial-next").textContent = page === STEPS.length - 1 ? "練習対局を始める" : "次へ →";
-}
+const eqSet = (a, b) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
+const tilesHtml = (tiles) => tiles.map((t) => rt(tileRank(t), tileSuit(t))).join("");
 
-export function showTutorial(practiceCb) {
-  onPractice = practiceCb;
-  page = 0;
-  render();
-  $("tutorial-overlay").classList.remove("hidden");
-}
-
-export function wireTutorial() {
-  $("tutorial-prev").addEventListener("click", () => { if (page > 0) { page--; render(); } });
-  $("tutorial-next").addEventListener("click", () => {
-    if (page < STEPS.length - 1) { page++; render(); }
-    else {
-      $("tutorial-overlay").classList.add("hidden");
-      onPractice && onPractice();
-    }
-  });
-  $("tutorial-overlay").addEventListener("click", (e) => {
-    if (e.target === $("tutorial-overlay")) $("tutorial-overlay").classList.add("hidden");
-  });
-}
-
-// 練習対局の状況別ヒント（UI文言のみ・AIには無介入）
-export function practiceHint(view) {
-  if (!view) return "";
-  if (view.terminal) return "🎉 練習対局おつかれさま！ タイトルから本番の対戦へどうぞ。";
-  if (view.yourTurn) {
-    if (view.mustLead) {
-      return "💡 あなたがリーダー。好きな役（単騎/ペア/トリプル/5枚役）を出せます。弱い牌から整理するのが基本。";
-    }
-    if (view.canPass) {
-      return `💡 場は${view.currentMeld ? view.currentMeld.size + "枚役" : "-"}。同じ枚数でより強い役を出すか「パス」。パスしても、誰かが出せばまたあなたの番が回ってきます。`;
-    }
+export class Tutorial {
+  constructor(onRender) {
+    this.onRender = onRender || (() => {});
+    this.idx = 0;
+    this._sched = false;
+    this.ctrl = new GameController(2,
+      [{ kind: "human", name: "あなた" }, { kind: "human", name: "先生" }],
+      1, () => this._tick(),
+      { fixedDeal: [MY_HAND, OPP_HAND], turnLimitSec: 0 });
+    this._tick();
   }
-  const low = view.players.find((p) => !p.isYou && !p.finished && p.count <= 2);
-  if (low) return `⚠ ${low.name} は残り${low.count}枚！ 上がられないように流れを考えましょう。`;
-  return "相手の手番です。出された役と枚数をよく見ておきましょう。";
+
+  view() { return this.ctrl.view(0); }
+  step() { return STEPS[this.idx] || null; }
+  done() { return this.ctrl.state.isTerminal(); }
+
+  // 選択を許可する牌（期待手のみ）
+  selectable() {
+    const s = this.step();
+    return new Set(s && s.who === 0 && s.type === "play" ? s.tiles : []);
+  }
+
+  expectPass() {
+    const s = this.step();
+    return !!(s && s.who === 0 && s.type === "pass");
+  }
+
+  instructionHtml() {
+    if (this.done()) {
+      return "🎉 チュートリアル完了！ 精算は「残り枚数 × 2の倍率」— 本番で会いましょう";
+    }
+    const s = this.step();
+    if (!s) return "";
+    if (s.who === 1) return "先生の番…";
+    if (s.type === "pass") return `${s.text}　→ <b>パス</b>`;
+    return `${s.text}　${tilesHtml(s.tiles)}`;
+  }
+
+  tryPlay(tiles) {
+    const s = this.step();
+    if (!s || s.who !== 0 || s.type !== "play") return "今は出せません";
+    if (!eqSet(tiles, s.tiles)) return "光っている牌を選んでね";
+    this.idx++;
+    const err = this.ctrl.play(0, tiles);
+    if (err) { this.idx--; return err; }
+    return null;
+  }
+
+  tryPass() {
+    const s = this.step();
+    if (!s || s.who !== 0 || s.type !== "pass") return "ここはパスの場面ではありません";
+    this.idx++;
+    const err = this.ctrl.pass(0);
+    if (err) { this.idx--; return err; }
+    return null;
+  }
+
+  _tick() {
+    const s = this.step();
+    if (s && s.who === 1 && !this._sched &&
+        this.ctrl.state.turn === 1 && !this.ctrl.state.isTerminal()) {
+      this._sched = true;
+      setTimeout(() => {
+        this._sched = false;
+        const cur = this.step();
+        if (!cur || cur.who !== 1) return;
+        this.idx++;
+        if (cur.type === "pass") this.ctrl.pass(1);
+        else this.ctrl.play(1, cur.tiles);
+      }, 1100);
+    }
+    this.onRender(this);   // 自身を渡す（呼び出し側の変数初期化順に依存しない）
+  }
 }

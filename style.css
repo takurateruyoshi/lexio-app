@@ -195,10 +195,9 @@ button.choice.active{
 .seat-hand{display:flex;gap:1px;flex-wrap:wrap;justify-content:center;max-width:300px;
   padding:2px 4px;background:rgba(0,0,0,.35);border-radius:6px}
 .top-menu select{padding:4px 8px;font-size:12px;min-width:0;border-radius:8px}
-.seat-hist{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;
-  opacity:.5;max-width:280px}
-.pos-l .seat-hist,.pos-r .seat-hist,.pos-tl .seat-hist,.pos-tr .seat-hist{max-width:170px}
-.hist-meld{display:flex;gap:2px}
+.seat-hist{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;
+  opacity:.65;max-width:150px;margin-top:2px}
+.hist-meld{display:flex;gap:1px}
 
 /* パス表示チップ */
 .pass-chip{
@@ -207,14 +206,10 @@ button.choice.active{
   border-radius:11px;padding:3px 11px;letter-spacing:.15em;
 }
 
-/* ---- 中央: 最新の手（牌のみ・文章なし） ---- */
+/* ---- 中央: 最新の手（牌のみ・枠なし） ---- */
 .center-info{
   position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);
-  padding:14px 18px;pointer-events:none;
-  background:linear-gradient(175deg,rgba(10,11,14,.82),rgba(20,22,27,.82));
-  border:1px solid rgba(233,196,106,.5);border-radius:14px;
-  box-shadow:0 0 28px rgba(233,196,106,.16), 0 10px 30px rgba(0,0,0,.6),
-    inset 0 1px 0 rgba(255,255,255,.08);
+  pointer-events:none;
 }
 .ci-meld{display:flex;gap:6px;justify-content:center;padding-bottom:8px}
 .ci-meld .tile.flat{--w:50px;--h:68px}
@@ -248,10 +243,10 @@ button.choice.active{
   text-shadow:0 0 14px rgba(233,196,106,.55);animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.65}}
 
-/* アクションボタン: 手牌のすぐ上（パス=左端 / 出す=右端）中型 */
+/* アクションボタン: 手牌の両端あたり（パス=左 / 出す=右）中型 */
 .side-btn{position:absolute;bottom:116px;z-index:20;display:flex;align-items:center;gap:12px}
-.side-left{left:3%}
-.side-right{right:3%}
+.side-left{left:max(2%, calc(50% - 460px))}
+.side-right{right:max(2%, calc(50% - 460px))}
 .side-btn .primary,button.side-btn.ghost,.side-btn .ghost{
   padding:13px 30px;font-size:17px;border-radius:12px;letter-spacing:.12em}
 button.side-btn.ghost{background:rgba(0,0,0,.6)}
@@ -380,6 +375,49 @@ button.side-btn.ghost{background:rgba(0,0,0,.6)}
     0 5px 0 -1px var(--base3),
     0 7px 6px rgba(0,0,0,.45);
 }
+
+/* 極小履歴牌（アバターの下） */
+.tile.tiny{--w:17px;--h:24px;border-radius:3px;
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,.85),
+    0 2px 0 -1px var(--tile-side),
+    0 3px 3px rgba(0,0,0,.4);
+}
+.tile.tiny .num{font-size:9px !important;font-weight:800;text-shadow:none}
+.tile.tiny .gly{display:none}
+.tile.tiny::after{display:none}
+
+/* チュートリアルの誘導 */
+.tile.hint-glow{
+  box-shadow:
+    inset 0 2px 2px rgba(255,255,255,.95),
+    inset 0 -2px 3px rgba(150,138,105,.45),
+    0 5px 0 -1px var(--tile-side),
+    0 9px 0 -1px var(--base2),
+    0 10px 0 -1px var(--base3),
+    0 0 0 2px var(--gold),
+    0 0 24px rgba(233,196,106,.75),
+    0 14px 12px rgba(0,0,0,.55) !important;
+  animation:pulse 1.4s ease-in-out infinite;
+}
+button.hint-glow{
+  box-shadow:0 0 0 2px var(--gold),0 0 24px rgba(233,196,106,.7);
+  animation:pulse 1.4s ease-in-out infinite;
+}
+.tile.dimmed{opacity:.3;pointer-events:none;filter:grayscale(.4)}
+
+/* モーダルの✗閉じるボタン */
+.modal-x{
+  position:absolute;top:10px;right:12px;z-index:5;
+  background:rgba(255,255,255,.08);border:1px solid var(--line2);color:var(--text);
+  width:36px;height:36px;border-radius:50%;padding:0;font-size:16px;line-height:1;
+}
+.modal-x:hover{background:rgba(255,255,255,.16)}
+.result-card{position:relative}
+
+/* ルールの ✓✗ マーク */
+.mark-ok{color:#5cd08a;font-weight:800;font-size:18px;margin-right:6px}
+.mark-ng{color:#ff6b5e;font-weight:800;font-size:18px;margin-right:6px}
 
 /* ---- ログドロワー ---- */
 .drawer{

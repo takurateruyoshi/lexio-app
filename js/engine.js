@@ -63,10 +63,10 @@ export function compareKeys(a, b) {
 
 export function straightSequences(maxRank) {
   const seqs = [];
+  // 自然な連番 a..a+4（1-2-3-4-5 や 2-3-4-5-6 を含む）
   for (let a = 1; a <= maxRank - 4; a++) seqs.push([a, a + 1, a + 2, a + 3, a + 4]);
-  // 上端ラップ: (max-3 .. max, 1) と (max-2 .. max, 1, 2)。2 を超えるラップは不可。
+  // 上端ラップは「1 で終わる」形のみ（例: 6-7-8-9-1）。2 を最後に置くことはできない。
   seqs.push([maxRank - 3, maxRank - 2, maxRank - 1, maxRank, 1]);
-  seqs.push([maxRank - 2, maxRank - 1, maxRank, 1, 2]);
   return seqs;
 }
 

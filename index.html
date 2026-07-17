@@ -159,6 +159,7 @@
   <!-- リンク/コード参加（名前入力） -->
   <div id="join-overlay" class="overlay hidden">
     <div class="result-card join-card">
+      <button id="join-cancel-btn" class="modal-x">✕</button>
       <h2>対局に参加</h2>
       <p class="lead">部屋 <b id="join-code-label" class="room-code small-code">-----</b> に参加します。</p>
       <div class="setup-row center">
@@ -168,7 +169,6 @@
       </div>
       <div class="setup-row center">
         <button id="join-go-btn" class="primary">参加する</button>
-        <button id="join-cancel-btn" class="ghost">やめる</button>
       </div>
       <p class="hint" id="join-stage"></p>
       <p class="hint" id="join-hint"></p>
@@ -178,6 +178,7 @@
   <!-- 接続診断 -->
   <div id="diag-overlay" class="overlay hidden">
     <div class="result-card join-card">
+      <button id="diag-close" class="modal-x">✕</button>
       <h2>接続診断</h2>
       <p class="lead">オンライン対戦に必要な3つの経路を確認します。</p>
       <div id="diag-body" class="diag-body">
@@ -188,20 +189,6 @@
       <p class="hint" id="diag-advice"></p>
       <div class="setup-row center">
         <button id="diag-run" class="primary">再テスト</button>
-        <button id="diag-close" class="ghost">閉じる</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- チュートリアル -->
-  <div id="tutorial-overlay" class="overlay hidden">
-    <div class="result-card rules-card tutorial-card">
-      <h2 id="tutorial-title">チュートリアル</h2>
-      <div id="tutorial-body" class="rules-body"></div>
-      <div class="setup-row center">
-        <button id="tutorial-prev" class="ghost">← 前へ</button>
-        <span id="tutorial-step" class="hint"></span>
-        <button id="tutorial-next" class="primary">次へ →</button>
       </div>
     </div>
   </div>
@@ -209,11 +196,9 @@
   <!-- ルール -->
   <div id="rules-overlay" class="overlay hidden">
     <div class="result-card rules-card">
+      <button id="rules-close" class="modal-x">✕</button>
       <h2>レキシオのルール</h2>
       <div id="rules-body" class="rules-body"></div>
-      <div class="setup-row center">
-        <button id="rules-close" class="primary">閉じる</button>
-      </div>
     </div>
   </div>
 

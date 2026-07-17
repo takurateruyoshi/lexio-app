@@ -6,7 +6,7 @@ import { HostSession, GuestSession, STORE_GUEST } from "./net.js";
 import { $, renderGame, setActionMessage, selectedTiles, showScreen, buildRulesContent } from "./ui.js";
 import { loadModel, getTheta } from "./model.js";
 import { saveGameRecord, exportRecordsToFile, countRecords, annotateBlocking } from "./replay.js";
-import { showTutorial, wireTutorial, practiceHint } from "./tutorial.js";
+import { Tutorial } from "./tutorial.js";
 import { loadCollectConfig, queueRecord, flushOutbox, isOptedOut, setOptOut } from "./collect.js";
 import { loadNetConfig, getIceServers } from "./netconfig.js";
 
@@ -47,8 +47,8 @@ function renderBanner(view) {
     if (session && session.mode === "host") {
       html += ` <button id="force-end" class="ghost small">対戦を終了する</button>`;
     }
-  } else if (session && session.practice) {
-    html = practiceHint(view);
+  } else if (session && session.mode === "tutorial" && session.tut) {
+    html = session.tut.instructionHtml();
   }
   b.innerHTML = html;
   b.classList.toggle("hidden", !html);
@@ -156,23 +156,39 @@ function renderSetup() {
 function setupGo() {
   const remaining = setup.size - setup.ai;
   if (remaining === 0) startSpectate();
-  else if (remaining === 1) startSolo(false);
+  else if (remaining === 1) startSolo();
   else createRoom();
 }
 
-// ============================== ソロ / 練習 ==============================
-function startSolo(practice) {
+// ============================== ソロ ==============================
+function startSolo() {
   try { localStorage.removeItem(STORE_SOLO); } catch {}
-  const n = practice ? 2 : setup.size;
-  const rounds = practice ? 1 : numRounds();
+  const n = setup.size;
   const seats = [{ kind: "human", name: storedName() }];
   for (let i = 1; i < n; i++) seats.push({ kind: "ai", name: `AI-${i}` });
-  const ctrl = new GameController(n, seats, rounds, () => onViewUpdate(ctrl.view(0)),
-    { turnLimitSec: practice ? 0 : turnLimit() });
-  session = { mode: "solo", ctrl, practice: !!practice };
+  const ctrl = new GameController(n, seats, numRounds(), () => onViewUpdate(ctrl.view(0)),
+    { turnLimitSec: turnLimit() });
+  session = { mode: "solo", ctrl };
   showScreen("game");
   onViewUpdate(ctrl.view(0));
   ctrl.advance();
+}
+
+// ============================== チュートリアル（誘導型・固定シナリオ） ==============================
+function startTutorial() {
+  const tut = new Tutorial((t) => {
+    if (!session || session.mode !== "tutorial" || session.tut !== t) return;
+    const view = t.view();
+    lastView = view;
+    renderGame(view, { showHistory: true, selectableIds: t.selectable() });
+    renderBanner(view);
+    $("pass-btn").classList.toggle("hint-glow", t.expectPass());
+    $("result-again").classList.remove("hidden");
+    $("result-again").textContent = "もう一度チュートリアル";
+  });
+  session = { mode: "tutorial", ctrl: tut.ctrl, tut };
+  showScreen("game");
+  tut.onRender(tut);
 }
 
 function updateResumeButton() {
@@ -231,7 +247,7 @@ function hostCallbacks() {
         $("setup-hint").innerHTML = `${msg} — <button id="offline-solo" class="ghost small">オフラインでソロ開始（募集席はAIになります）</button>`;
         showScreen("setup");
         const b = $("offline-solo");
-        if (b) b.addEventListener("click", () => startSolo(false));
+        if (b) b.addEventListener("click", () => startSolo());
         session = null;
       } else {
         $("title-hint").textContent = msg;
@@ -426,6 +442,10 @@ function actor() {
 }
 
 function doPlay() {
+  if (session && session.mode === "tutorial") {
+    setActionMessage(session.tut.tryPlay(selectedTiles()));
+    return;
+  }
   const a = actor();
   if (!a) return;
   const tiles = selectedTiles();
@@ -436,6 +456,10 @@ function doPlay() {
 }
 
 function doPass() {
+  if (session && session.mode === "tutorial") {
+    setActionMessage(session.tut.tryPass());
+    return;
+  }
   const a = actor();
   if (!a) return;
   const err = a.pass();
@@ -446,12 +470,14 @@ function rematch() {
   if (!session) return;
   session._recSaved = false;
   if (session.mode === "solo") {
-    if (!session.ctrl.nextRound()) startSolo(session.practice);
+    if (!session.ctrl.nextRound()) startSolo();
   } else if (session.mode === "host") {
     session.host.advanceMatch();
   } else if (session.mode === "spectate") {
     session.gamesDone = 0;
     startSpectateGame();
+  } else if (session.mode === "tutorial") {
+    startTutorial();
   }
 }
 
@@ -490,11 +516,11 @@ function tryAutoResume() {
   const guestSave = GuestSession.loadResume();
   if (guestSave) { resumeGuest(guestSave); return; }
   updateResumeButton();
-  // 初回アクセスはチュートリアルを案内
+  // 初回アクセスは誘導型チュートリアルへ
   try {
     if (!localStorage.getItem(SEEN_KEY)) {
       localStorage.setItem(SEEN_KEY, "1");
-      showTutorial(() => startSolo(true));
+      startTutorial();
     }
   } catch {}
 }
@@ -546,7 +572,6 @@ async function runDiagnosis() {
 
 window.addEventListener("DOMContentLoaded", () => {
   buildRulesContent();
-  wireTutorial();
   loadModel().then(updateModelInfo);
   loadNetConfig();   // TURN/STUN 設定（model/net.json）
   loadCollectConfig().then(() => {
@@ -563,7 +588,7 @@ window.addEventListener("DOMContentLoaded", () => {
   // タイトル
   $("battle-btn").addEventListener("click", goSetup);
   $("resume-btn").addEventListener("click", resumeSolo);
-  $("tutorial-btn").addEventListener("click", () => showTutorial(() => startSolo(true)));
+  $("tutorial-btn").addEventListener("click", startTutorial);
   $("join-room-btn").addEventListener("click", () => {
     const code = $("join-code").value.trim();
     if (code.length < 4) { $("title-hint").textContent = "部屋コードを入力してください"; return; }

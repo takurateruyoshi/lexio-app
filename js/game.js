@@ -3,7 +3,7 @@
 import {
   standardConfig, GameState, classify, beats, canBeat, enumerateMelds,
   legalMoves, roundScores, meldText, tileRank, tileSuit, tileStrength,
-  compareKeys, SUIT_CLASS, SUIT_LABEL, SUIT_GLYPH,
+  compareKeys, fullDeck, startingPlayer, SUIT_CLASS, SUIT_LABEL, SUIT_GLYPH,
 } from "./engine.js";
 import { BeliefState, chooseMove } from "./ai.js";
 import { getTheta } from "./model.js";
@@ -165,7 +165,21 @@ export class GameController {
   }
 
   _startRound() {
-    this.state = GameState.deal(this.cfg);
+    if (this.aiOpts.fixedDeal) {
+      // チュートリアル等の固定配牌
+      const st = new GameState(this.cfg);
+      st.hands = this.aiOpts.fixedDeal.map((h) => [...h].sort((a, b) => a - b));
+      const used = new Set(st.hands.flat());
+      st.hidden = fullDeck(this.cfg).filter((t) => !used.has(t));
+      st.leader = startingPlayer(st.hands);
+      st.turn = st.leader;
+      st.passed = new Array(this.cfg.numPlayers).fill(false);
+      st.played = Array.from({ length: this.cfg.numPlayers }, () => []);
+      st.finished = [];
+      this.state = st;
+    } else {
+      this.state = GameState.deal(this.cfg);
+    }
     this.log = [];
     this.trick = [];               // 現在のトリック [{player, tiles}]
     this.scores = null;
