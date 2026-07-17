@@ -40,6 +40,16 @@
         <button id="join-room-btn" class="ghost">参加する</button>
       </span>
     </div>
+    <div class="setup-row">
+      <button id="spectate-btn" class="ghost">🔬 AI観戦・記録</button>
+      <label>連続対局数
+        <input id="num-games" type="number" min="1" max="100" value="3">
+      </label>
+      <label class="toggle"><input id="precise-toggle" type="checkbox">
+        精密思考（1手1秒・研究用）</label>
+      <button id="export-btn" class="ghost small">牌譜をエクスポート</button>
+    </div>
+    <p class="hint" id="model-info">モデル: 初期値</p>
     <p class="hint" id="title-hint"></p>
     <p class="hint">※ オンライン対戦はP2P接続です。同じWi-Fi内なら確実につながります。
       リロードしても自動で復帰できます。</p>
@@ -66,6 +76,12 @@
 
       <div id="round-indicator" class="round-indicator"></div>
       <div class="top-menu">
+        <label class="toggle spectate-only hidden"><input id="reveal-toggle" type="checkbox" checked>手札公開</label>
+        <select id="speed-select" class="spectate-only hidden">
+          <option value="0">即時</option>
+          <option value="200" selected>高速</option>
+          <option value="650">通常</option>
+        </select>
         <label class="toggle"><input id="history-toggle" type="checkbox" checked>履歴</label>
         <button id="drawer-btn" class="ghost small">ログ</button>
         <button id="rules-btn-game" class="ghost small">ルール</button>

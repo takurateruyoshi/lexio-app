@@ -83,6 +83,14 @@ function renderTable(view, showHistory) {
     zone.className = "seat-zone";
     const plays = trickByP[p.index] || [];
 
+    // 観戦モードの手札公開（自席以外）
+    if (view.allHands && !p.isYou && view.allHands[p.index]) {
+      const hr = document.createElement("div");
+      hr.className = "seat-hand";
+      for (const t of view.allHands[p.index]) hr.appendChild(tileEl(t, "mini", false));
+      zone.appendChild(hr);
+    }
+
     if (showHistory) {
       const hist = view.seats[p.index].history;
       const past = hist.slice(0, hist.length - plays.length);

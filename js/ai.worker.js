@@ -9,7 +9,7 @@ self.onmessage = (ev) => {
     const cfg = standardConfig(numPlayers);
     const st = GameState.fromJSON(cfg, state);
     const b = BeliefState.fromJSON(cfg, belief);
-    const { move, thought } = chooseMove(st, me, b, opts || {});
+    const { move, thought } = chooseMove(st, me, b, opts || {}); // opts.theta 含む
     self.postMessage({ id, moveTiles: move ? move.tiles : null, thought });
   } catch (e) {
     self.postMessage({ id, error: String(e && e.message || e) });

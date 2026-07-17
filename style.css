@@ -146,6 +146,9 @@ button.small{padding:6px 12px;font-size:12px}
 .seat-zone{display:flex;flex-direction:column;align-items:center;gap:6px}
 .pos-b .seat-zone{flex-direction:column-reverse}
 .seat-meld{display:flex;gap:6px;min-height:56px;align-items:center;justify-content:center}
+.seat-hand{display:flex;gap:1px;flex-wrap:wrap;justify-content:center;max-width:300px;
+  padding:2px 4px;background:rgba(0,0,0,.35);border-radius:6px}
+.top-menu select{padding:4px 8px;font-size:12px;min-width:0;border-radius:8px}
 .seat-hist{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;
   opacity:.5;max-width:280px}
 .pos-l .seat-hist,.pos-r .seat-hist,.pos-tl .seat-hist,.pos-tr .seat-hist{max-width:170px}

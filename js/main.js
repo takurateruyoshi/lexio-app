@@ -3,6 +3,8 @@
 import { GameController } from "./game.js";
 import { HostSession, GuestSession, STORE_GUEST } from "./net.js";
 import { $, renderGame, setActionMessage, selectedTiles, showScreen, buildRulesContent } from "./ui.js";
+import { loadModel, getTheta } from "./model.js";
+import { saveGameRecord, exportRecordsToFile, countRecords, annotateBlocking } from "./replay.js";
 
 const STORE_SOLO = "lexio.solo.v1";
 
@@ -47,12 +49,33 @@ function renderBanner(view) {
   if (fe) fe.addEventListener("click", () => session && session.host && session.host.forceEnd());
 }
 
+// 完了したマッチの牌譜を保存（阻害行動アノテーション付き）
+function saveMatchRecords(ctrl, mode) {
+  const th = getTheta();
+  for (const rec of ctrl.records) {
+    try { annotateBlocking(rec); } catch {}
+    saveGameRecord({
+      mode,
+      at: new Date().toISOString(),
+      model: { gen: th.gen, games: th.games },
+      numPlayers: ctrl.cfg.numPlayers,
+      totalRounds: ctrl.totalRounds,
+      ...rec,
+    });
+  }
+}
+
 function onViewUpdate(view) {
   lastView = view;
   renderGame(view, { showHistory: showHistory() });
   renderBanner(view);
   // ゲストは次ラウンド/再戦をホスト任せにする
   $("result-again").classList.toggle("hidden", session && session.mode === "guest");
+  // 人間対局の牌譜保存（マッチ終了時に一度）
+  if (session && view.matchOver && !session._recSaved) {
+    const ctrl = session.ctrl || (session.host && session.host.controller);
+    if (ctrl) { session._recSaved = true; saveMatchRecords(ctrl, session.mode); }
+  }
   // ソロは自動保存（リロード復帰用）
   if (session && session.mode === "solo") {
     try {
@@ -74,9 +97,11 @@ function leaveSession() {
   session = null;
   lastView = null;
   reconnecting = null;
+  toggleSpectateControls(false);
   showScreen("title");
   $("title-hint").textContent = "";
   updateResumeButton();
+  updateModelInfo();
 }
 
 // ---- ソロ ----
@@ -256,11 +281,94 @@ function doPass() {
 
 function rematch() {
   if (!session) return;
+  session._recSaved = false;
   if (session.mode === "solo") {
     if (!session.ctrl.nextRound()) startSolo();
   } else if (session.mode === "host") {
     session.host.advanceMatch();
+  } else if (session.mode === "spectate") {
+    session.gamesDone = 0;   // シリーズを最初から
+    startSpectateGame();
   }
+}
+
+// ---- AI観戦・記録モード ----
+function toggleSpectateControls(on) {
+  document.querySelectorAll(".spectate-only").forEach((e) => e.classList.toggle("hidden", !on));
+  $("end-btn").classList.toggle("hidden", on);
+  $("pass-btn").classList.toggle("hidden", on);
+  $("play-btn").classList.toggle("hidden", on);
+}
+
+function spectateAiOpts() {
+  const o = { minDelayMs: parseInt($("speed-select").value, 10) };
+  if (session && session.precise) { o.budgetMs = 1000; o.totalPlayouts = 1600; }
+  return o;
+}
+
+function startSpectate() {
+  const n = parseInt($("num-players").value, 10);
+  session = {
+    mode: "spectate",
+    n,
+    rounds: Math.max(1, Math.min(99, parseInt($("num-rounds").value, 10) || 1)),
+    gamesTarget: Math.max(1, Math.min(100, parseInt($("num-games").value, 10) || 1)),
+    gamesDone: 0,
+    precise: $("precise-toggle").checked,
+  };
+  startSpectateGame();
+}
+
+function startSpectateGame() {
+  session._recSaved = false;
+  const seats = Array.from({ length: session.n }, (_, i) => ({ kind: "ai", name: `AI-${i}` }));
+  const ctrl = new GameController(session.n, seats, session.rounds,
+    () => onSpectateUpdate(), spectateAiOpts());
+  session.ctrl = ctrl;
+  showScreen("game");
+  toggleSpectateControls(true);
+  onSpectateUpdate();
+  ctrl.advance();
+}
+
+function onSpectateUpdate() {
+  if (!session || session.mode !== "spectate") return;
+  const ctrl = session.ctrl;
+  const view = ctrl.view(0, $("reveal-toggle").checked);
+  lastView = view;
+  renderGame(view, { showHistory: showHistory() });
+  $("round-indicator").textContent =
+    `観戦 ${session.gamesDone + 1}/${session.gamesTarget}局　ラウンド ${view.round}/${view.totalRounds}`;
+  $("result-again").classList.add("hidden");
+
+  if (view.terminal && !session._advScheduled) {
+    session._advScheduled = true;
+    setTimeout(() => {
+      if (!session || session.mode !== "spectate") return;
+      session._advScheduled = false;
+      if (!view.matchOver) {
+        ctrl.nextRound();
+      } else {
+        if (!session._recSaved) { session._recSaved = true; saveMatchRecords(ctrl, "spectate"); }
+        session.gamesDone++;
+        if (session.gamesDone < session.gamesTarget) {
+          startSpectateGame();
+        } else {
+          $("result-again").classList.remove("hidden");
+          $("result-again").textContent = "もう一度観戦";
+          updateModelInfo();
+        }
+      }
+    }, 1400);
+  }
+}
+
+async function updateModelInfo() {
+  const th = getTheta();
+  const n = await countRecords();
+  $("model-info").textContent =
+    `モデル: ${th.gen > 0 ? `世代 ${th.gen}・自己対戦 ${th.games.toLocaleString()} 局で学習済み` : "初期値（学習前）"}` +
+    `　｜　保存済み牌譜: ${n} ラウンド`;
 }
 
 // ---- 対戦終了の提案 ----
@@ -296,6 +404,16 @@ function tryAutoResume() {
 // ---- 配線 ----
 window.addEventListener("DOMContentLoaded", () => {
   buildRulesContent();
+  loadModel().then(updateModelInfo);
+  $("spectate-btn").addEventListener("click", startSpectate);
+  $("export-btn").addEventListener("click", async () => {
+    const n = await exportRecordsToFile();
+    $("title-hint").textContent = `牌譜 ${n} ラウンド分をエクスポートしました`;
+  });
+  $("reveal-toggle").addEventListener("change", () => onSpectateUpdate());
+  $("speed-select").addEventListener("change", () => {
+    if (session && session.ctrl) session.ctrl.aiOpts.minDelayMs = parseInt($("speed-select").value, 10);
+  });
   $("solo-btn").addEventListener("click", startSolo);
   $("resume-btn").addEventListener("click", resumeSolo);
   $("create-room-btn").addEventListener("click", createRoom);

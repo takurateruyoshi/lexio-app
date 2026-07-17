@@ -1,0 +1,19 @@
+[
+  {
+    "at": "2026-07-17T04:57:28.370Z",
+    "gen": 11,
+    "games": 1734,
+    "gateMean": 0.727,
+    "gens": 11,
+    "theta": {
+      "wSize": 1.2267,
+      "wStrength": 0.0008,
+      "wTwos": -0.1594,
+      "wPass": 0.7816,
+      "rPass": 0.2829,
+      "rComboPref": 0.6148,
+      "rFivePref": 0.4562,
+      "softPassAccept": 0.0929
+    }
+  }
+]

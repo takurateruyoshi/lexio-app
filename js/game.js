@@ -6,6 +6,7 @@ import {
   SUIT_CLASS, SUIT_LABEL, SUIT_GLYPH,
 } from "./engine.js";
 import { BeliefState, chooseMove } from "./ai.js";
+import { getTheta } from "./model.js";
 
 export function tileJson(t, maxRank) {
   const s = tileSuit(t);
@@ -16,7 +17,7 @@ export function tileJson(t, maxRank) {
   };
 }
 
-const AI_MIN_DELAY_MS = 650;   // AI手番の演出用ディレイ
+const AI_MIN_DELAY_MS = 650;   // AI手番の演出用ディレイ（既定値）
 
 // AI実行: Web Worker(可能なら) / メインスレッド fallback
 class AiRunner {
@@ -39,6 +40,7 @@ class AiRunner {
   }
 
   async choose(state, me, belief, opts) {
+    opts = { theta: getTheta(), ...opts };
     if (this.worker) {
       const id = ++this._id;
       const payload = {
@@ -65,10 +67,13 @@ export class GameController {
    * seats: 席ごとの {kind: "human"|"ai"|"remote", name}
    * totalRounds: ラウンド数（累計チップで総合順位）
    * onUpdate(): 状態変化時に呼ばれる（ビューは view(seat) で取得）
+   * aiOpts: {minDelayMs, budgetMs, totalPlayouts, record} 観戦/研究モード用
    */
-  constructor(numPlayers, seats, totalRounds, onUpdate) {
+  constructor(numPlayers, seats, totalRounds, onUpdate, aiOpts = {}) {
     this.cfg = standardConfig(numPlayers);
     this.seats = seats.map((s) => ({ ...s }));
+    this.aiOpts = { ...aiOpts };
+    this.records = [];             // ラウンドごとの牌譜
     this.totalRounds = Math.max(1, Math.min(99, totalRounds | 0));
     this.round = 1;
     this.totals = new Array(numPlayers).fill(0);   // 累計チップ
@@ -95,6 +100,7 @@ export class GameController {
       trick: this.trick.map((e) => ({ player: e.player, tiles: [...e.tiles] })),
       scores: this.scores ? [...this.scores] : null,
       matchEnded: this.matchEnded,
+      aiOpts: { ...this.aiOpts },
       beliefs: Object.fromEntries(
         [...this.beliefs].map(([s, b]) => [s, b.toJSON()])),
     };
@@ -112,6 +118,9 @@ export class GameController {
     c.paused = false;
     c.pausedReason = null;
     c.matchEnded = !!snap.matchEnded;
+    c.aiOpts = { ...(snap.aiOpts || {}) };
+    c.records = [];
+    c._rec = { round: snap.round, seats: [], deal: [], moves: [], scores: null }; // 復元後の途中記録は簡略
     c.ai = new AiRunner();
     c.state = GameState.fromJSON(c.cfg, snap.state);
     c.log = (snap.log || []).map((e) => ({ ...e }));
@@ -151,6 +160,14 @@ export class GameController {
     this.log = [];
     this.trick = [];               // 現在のトリック [{player, tiles}]
     this.scores = null;
+    // 牌譜（このラウンド）
+    this._rec = {
+      round: this.round,
+      seats: this.seats.map((s) => ({ kind: s.kind, name: s.name })),
+      deal: this.state.hands.map((h) => [...h]),
+      moves: [],
+      scores: null,
+    };
     this.beliefs = new Map();      // seat -> BeliefState（AI席のみ）
     for (let p = 0; p < this.cfg.numPlayers; p++) {
       if (this.seats[p].kind === "ai") {
@@ -193,6 +210,13 @@ export class GameController {
 
   _applyMove(seat, meld) {
     const name = this.names()[seat];
+    this._rec.moves.push({
+      seat,
+      tiles: meld === null ? null : [...meld.tiles],
+      counts: this.state.hands.map((h) => h.length),   // 手番時点の残枚数
+      currentBefore: this.state.current ? [...this.state.current.tiles] : null,
+      thought: this._lastThought || null,
+    });
     if (meld === null) {
       this._broadcastObservation(seat, null);
       this._note(`${name} は パス`, "pass", this._lastThought);
@@ -211,6 +235,9 @@ export class GameController {
       this.scores = roundScores(this.state);
       for (let i = 0; i < this.cfg.numPlayers; i++) this.totals[i] += this.scores[i];
       this._note(`ラウンド ${this.round}/${this.totalRounds} 終了。スコアを精算します。`, "info");
+      this._rec.scores = [...this.scores];
+      this._rec.finished = [...this.state.finished];
+      this.records.push(this._rec);
     }
   }
 
@@ -226,8 +253,11 @@ export class GameController {
       const belief = this.beliefs.get(p);
       belief.syncMyHand(this.state.hands[p]);
       const t0 = Date.now();
-      const { moveTiles, thought } = await this.ai.choose(this.state, p, belief, {});
-      const wait = AI_MIN_DELAY_MS - (Date.now() - t0);
+      const chooseOpts = {};
+      if (this.aiOpts.budgetMs) chooseOpts.budgetMs = this.aiOpts.budgetMs;
+      if (this.aiOpts.totalPlayouts) chooseOpts.totalPlayouts = this.aiOpts.totalPlayouts;
+      const { moveTiles, thought } = await this.ai.choose(this.state, p, belief, chooseOpts);
+      const wait = (this.aiOpts.minDelayMs ?? AI_MIN_DELAY_MS) - (Date.now() - t0);
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       const meld = moveTiles ? classify(moveTiles, this.cfg.maxRank) : null;
       this._lastThought = thought && !thought.forced ? thought : null;
@@ -270,7 +300,8 @@ export class GameController {
   }
 
   // seat 視点のビュー（ローカル描画/ネットワーク送信兼用）
-  view(seat) {
+  // revealAll: 観戦モードで全席の手札を公開する
+  view(seat, revealAll = false) {
     const st = this.state;
     const mr = this.cfg.maxRank;
     const names = this.names();
@@ -325,6 +356,9 @@ export class GameController {
         twos: st.hands[i].filter((t) => tileRank(t) === 2).length,
       })),
       winner: st.finished.length ? names[st.finished[0]] : null,
+      allHands: !revealAll ? null : st.hands.map((h) =>
+        [...h].sort((a, b) => tileStrength(a, mr) - tileStrength(b, mr))
+          .map((t) => tileJson(t, mr))),
     };
   }
 }

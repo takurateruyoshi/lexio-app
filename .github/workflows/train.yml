@@ -1,0 +1,44 @@
+name: continuous-selfplay-training
+
+# 正準モデル（model/weights.json）の継続学習。
+# 6時間ごとに自己対戦学習を回し、ゲート（現行モデルに劣らない）を
+# 通過した場合のみ重みをコミットする（Pages が自動再配信）。
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "学習時間（分）"
+        default: "20"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: train
+  cancel-in-progress: false
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Self-play training
+        run: node tools/train_selfplay.mjs --minutes ${{ github.event.inputs.minutes || 20 }}
+      - name: Commit updated weights (if improved)
+        run: |
+          if ! git diff --quiet model/; then
+            git config user.name "lexio-trainer[bot]"
+            git config user.email "actions@github.com"
+            git add model/
+            git commit -m "model: self-play training update (gen $(node -p "require('./model/weights.json').gen"))"
+            git pull --rebase origin main
+            git push
+          else
+            echo "no improvement — weights unchanged"
+          fi
