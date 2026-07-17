@@ -409,6 +409,8 @@ class GameState:
             s.current = move
             s.last_player = p
             s.played[p].append(move)
+            # パスは「その時点の役への保留」— 新しい役が出たら全員のパスを解除
+            s.passed = [not s.hands[i] for i in range(s.cfg.num_players)]
             if not s.hands[p]:                    # 上がり
                 s.finished.append(p)
                 s.passed[p] = True
@@ -438,17 +440,16 @@ class GameState:
 # ---- レキシオの得点計算 --------------------------------------------------
 def round_scores(state: GameState) -> np.ndarray:
     """ラウンド終了時のチップ収支(正=得, 負=損)。
-    公式ルール(marquand.net で検証):
       「上がりが出たら全プレイヤーが互いに, 残り牌枚数の差の額を支払う。
-        枚数が多い側が少ない側へ差額を払う。手牌の 2 の枚数で支払い額の倍率が
-        増える(1枚=×2 doubles, 2枚=×3 triples, ... 倍率 = 2の枚数+1)。」
+        枚数が多い側が少ない側へ差額を払う。手牌の 2 一枚ごとに支払い倍率が
+        ×2 される(1枚=×2, 2枚=×4, ... 倍率 = 2^枚数)。」
     例: 残牌 Bill0/Sally2/Joe5/Ben8 → Bill が全員から受取, Ben が全員へ支払。"""
     cfg = state.cfg
     n = cfg.num_players
     remain = np.array([len(state.hands[i]) for i in range(n)], dtype=float)
     num_two = np.array(
         [sum(1 for t in state.hands[i] if tile_rank(t) == 2) for i in range(n)])
-    mult = 1.0 + num_two   # 2 一枚ごとに倍率+1 (doubles, triples, ...)
+    mult = np.power(2.0, num_two)   # 2 一枚ごとに ×2 (×2, ×4, ...)
     score = np.zeros(n)
     for i in range(n):
         for j in range(n):

@@ -218,6 +218,67 @@ export function setActionMessage(msg) {
   $("action-msg").textContent = msg || "";
 }
 
+// ---- ルール説明（実際の牌グラフィックで表示） ----
+const R_GLYPH = ["☁", "★", "☾", "☀"];
+const R_CLASS = ["cloud", "star", "moon", "sun"];
+// rank/suit から表示用の小型牌HTMLを作る
+const rt = (rank, suit) =>
+  `<span class="tile rtile ${R_CLASS[suit]}"><span class="num">${rank}</span><span class="gly">${R_GLYPH[suit]}</span></span>`;
+const meldHtml = (pairs) => pairs.map(([r, s]) => rt(r, s)).join("");
+const LT = `<span class="rule-sep">&lt;</span>`;
+
+export function buildRulesContent() {
+  const body = $("rules-body");
+  body.innerHTML = `
+    <h3>牌の強さ（弱 → 強）</h3>
+    <div class="rule-row">
+      ${rt(3,0)}${LT}${rt(4,0)}${LT}${rt(5,0)}
+      <span class="rule-ellipsis">…</span>${LT}${rt(9,0)}${LT}${rt(1,0)}${LT}${rt(2,0)}
+    </div>
+    <p>3 が最弱、<b>1</b> と <b>2</b> は最大数字より強い（<b>2</b> が最強）。</p>
+    <div class="rule-row"><span class="rule-label">同じ数字はスートで決着</span>
+      ${rt(7,0)}${LT}${rt(7,1)}${LT}${rt(7,2)}${LT}${rt(7,3)}
+    </div>
+
+    <h3>役（同じ枚数同士でのみ勝負）</h3>
+    <div class="rule-row"><span class="rule-label">単騎（1枚)</span>${rt(8,2)}</div>
+    <div class="rule-row"><span class="rule-label">ペア（同数字2枚）</span>${meldHtml([[8,1],[8,3]])}</div>
+    <div class="rule-row"><span class="rule-label">トリプル（同数字3枚）</span>${meldHtml([[8,0],[8,1],[8,2]])}</div>
+
+    <h3>5枚役の強さ（弱 → 強）</h3>
+    <div class="rule-row"><span class="rule-label">① ストレート</span>
+      ${meldHtml([[4,0],[5,1],[6,2],[7,0],[8,3]])}<span class="rule-note">連番5つ</span></div>
+    <div class="rule-row"><span class="rule-label">② フラッシュ</span>
+      ${meldHtml([[3,2],[5,2],[6,2],[8,2],[9,2]])}<span class="rule-note">同スート5枚</span></div>
+    <div class="rule-row"><span class="rule-label">③ フルハウス</span>
+      ${meldHtml([[8,0],[8,1],[8,2],[5,0],[5,3]])}<span class="rule-note">3枚+2枚</span></div>
+    <div class="rule-row"><span class="rule-label">④ フォーカード</span>
+      ${meldHtml([[6,0],[6,1],[6,2],[6,3],[9,1]])}<span class="rule-note">同数字4枚+1枚</span></div>
+    <div class="rule-row"><span class="rule-label">⑤ ストレートフラッシュ</span>
+      ${meldHtml([[5,3],[6,3],[7,3],[8,3],[9,3]])}<span class="rule-note">連番+同スート</span></div>
+    <div class="rule-row"><span class="rule-label">上端をまたぐ形も有効</span>
+      ${meldHtml([[6,0],[7,1],[8,2],[9,0],[1,3]])}<span class="rule-sep">／</span>
+      ${meldHtml([[7,0],[8,1],[9,2],[1,0],[2,3]])}
+    </div>
+    <p><b>2</b> を超えて 3 へは続きません（8-9-1-2-3 は不可）。</p>
+
+    <h3>進行</h3>
+    <p>リーダーが好きな役を出し、以降は同じ枚数でより強い役を出すか「パス」。
+      パスしても、誰かが新しい役を出せばまた出せます。
+      全員がパスすると場が流れ、最後に出した人が次のリーダーになります。</p>
+
+    <h3>ラウンド終了と精算</h3>
+    <p><b>誰かが手札を出し切った瞬間</b>にラウンド終了。
+      全プレイヤーが互いに「残り枚数の差」をチップで支払います。</p>
+    <div class="rule-row"><span class="rule-label">支払い倍率</span>
+      ${rt(2,0)}<span class="rule-note">が手札に1枚 → ×2</span>
+      <span class="rule-sep">／</span>
+      ${meldHtml([[2,0],[2,1]])}<span class="rule-note">2枚 → ×4 …</span>
+    </div>
+    <p>設定したラウンド数を繰り返し、累計チップで総合順位が決まります。</p>
+  `;
+}
+
 export function showScreen(name) {
   for (const id of ["screen-title", "screen-lobby", "screen-game"]) {
     $(id).classList.toggle("hidden", id !== "screen-" + name);

@@ -103,27 +103,7 @@
   <div id="rules-overlay" class="overlay hidden">
     <div class="result-card rules-card">
       <h2>レキシオのルール</h2>
-      <div class="rules-body">
-        <h3>牌の強さ</h3>
-        <p><b>3</b> が最弱、<b>2</b> が最強:
-          3 &lt; 4 &lt; … &lt; 最大数字 &lt; <b>1</b> &lt; <b>2</b><br>
-          同じ数字はスートで決着: ☁雲 &lt; ★星 &lt; ☾月 &lt; ☀太陽</p>
-        <h3>役（同じ枚数同士でのみ勝負）</h3>
-        <p>単騎（1枚）／ ペア（同数字2枚）／ トリプル（同数字3枚）／ 5枚役</p>
-        <h3>5枚役の強さ（弱 → 強）</h3>
-        <p class="rank-order">
-          ストレート &lt; フラッシュ &lt; フルハウス &lt; フォーカード &lt; ストレートフラッシュ</p>
-        <p>ストレートは連番5つ。上端をまたぐ形（例: 6-7-8-9-<b>1</b>、7-8-9-<b>1</b>-<b>2</b>）も有効。
-          <b>2</b> を超えて 3 へは続きません。</p>
-        <h3>進行</h3>
-        <p>リーダーが好きな役を出し、以降は同じ枚数でより強い役を出すか「パス」。
-          全員がパスすると場が流れ、最後に出した人が次のリーダーになります。</p>
-        <h3>ラウンド終了と精算</h3>
-        <p><b>誰かが手札を出し切った瞬間</b>にラウンド終了。
-          全プレイヤーが互いに「残り枚数の差」をチップで支払います。
-          手札に残った <b>2</b> 一枚ごとに自分の支払い倍率が +1（2倍、3倍…）。</p>
-        <p>設定したラウンド数を繰り返し、累計チップで総合順位が決まります。</p>
-      </div>
+      <div id="rules-body" class="rules-body"></div>
       <div class="setup-row center">
         <button id="rules-close" class="primary">閉じる</button>
       </div>
@@ -137,7 +117,7 @@
       <p id="result-round" class="result-round"></p>
       <table id="result-table"></table>
       <p class="result-note">チップは「残り枚数の差」を支払い、手札の<b>2</b>一枚ごとに
-        支払い倍率が +1（2倍, 3倍…）になります。</p>
+        支払いが ×2（1枚で2倍、2枚で4倍…）になります。</p>
       <div class="setup-row center">
         <button id="result-again" class="primary">もう一局</button>
         <button id="result-title-btn" class="ghost">タイトルへ</button>

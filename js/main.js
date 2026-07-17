@@ -2,7 +2,7 @@
 "use strict";
 import { GameController } from "./game.js";
 import { HostSession, GuestSession } from "./net.js";
-import { $, renderGame, setActionMessage, selectedTiles, showScreen } from "./ui.js";
+import { $, renderGame, setActionMessage, selectedTiles, showScreen, buildRulesContent } from "./ui.js";
 
 let session = null;      // {mode:'solo'|'host'|'guest', ...}
 let lastView = null;
@@ -168,6 +168,7 @@ window.addEventListener("DOMContentLoaded", () => {
   $("history-toggle").addEventListener("change", rerender);
   $("result-again").addEventListener("click", rematch);
   $("result-title-btn").addEventListener("click", leaveSession);
+  buildRulesContent();
   const openRules = () => $("rules-overlay").classList.remove("hidden");
   $("rules-btn-title").addEventListener("click", openRules);
   $("rules-btn-game").addEventListener("click", openRules);

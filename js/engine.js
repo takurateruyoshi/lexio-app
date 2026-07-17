@@ -324,6 +324,8 @@ export class GameState {
       s.current = move;
       s.lastPlayer = p;
       s.played[p].push(move);
+      // パスは「その時点の役への保留」— 新しい役が出たら全員のパスを解除する
+      for (let i = 0; i < s.cfg.numPlayers; i++) s.passed[i] = !s.hands[i].length;
       if (!s.hands[p].length) {            // 上がり
         s.finished.push(p);
         s.passed[p] = true;
@@ -356,11 +358,11 @@ export class GameState {
 }
 
 // ---- 得点計算 --------------------------------------------------------------
-// ペアワイズ: 残り枚数の差を、多い側がその人の倍率(1 + 手中の2の枚数)で支払う。
+// ペアワイズ: 残り枚数の差を、多い側がその人の倍率(2^手中の2の枚数: ×2,×4,…)で支払う。
 export function roundScores(state) {
   const n = state.cfg.numPlayers;
   const remain = state.hands.map((h) => h.length);
-  const mult = state.hands.map((h) => 1 + h.filter((t) => tileRank(t) === 2).length);
+  const mult = state.hands.map((h) => Math.pow(2, h.filter((t) => tileRank(t) === 2).length));
   const score = new Array(n).fill(0);
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {

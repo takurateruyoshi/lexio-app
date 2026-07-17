@@ -301,11 +301,30 @@ button.small{padding:6px 12px;font-size:12px}
 .result-round{font-size:12px;color:var(--muted);margin:-10px 0 14px}
 
 /* ルールモーダル */
-.rules-card{max-width:600px;text-align:left;max-height:86vh;overflow-y:auto}
+.rules-card{max-width:640px;text-align:left;max-height:86vh;overflow-y:auto}
 .rules-card h2{text-align:center}
-.rules-body h3{font-size:14px;color:var(--gold);margin:16px 0 6px;letter-spacing:.06em}
-.rules-body p{font-size:13px;color:var(--text);line-height:1.8;margin:0 0 4px}
-.rules-body .rank-order{font-weight:700}
+.rules-body h3{font-size:14px;color:var(--gold);margin:18px 0 8px;letter-spacing:.06em}
+.rules-body p{font-size:12px;color:var(--muted);line-height:1.7;margin:2px 0 6px}
+.rules-body p b{color:var(--text)}
+
+/* ルール内の小型牌 */
+.tile.rtile{
+  --w:32px;--h:44px;border-radius:5px;
+  display:inline-flex;margin:2px 1px 6px;vertical-align:middle;
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,.9),
+    inset 0 -1px 2px rgba(150,138,105,.4),
+    0 3px 0 -1px var(--tile-side),
+    0 5px 0 -1px var(--base3),
+    0 6px 5px rgba(0,0,0,.35);
+}
+.tile.rtile .num{font-size:16px}
+.tile.rtile .gly{font-size:9px;margin-top:1px}
+.rule-row{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin:4px 0 10px}
+.rule-label{min-width:150px;font-size:12px;color:var(--text);font-weight:600}
+.rule-sep{color:var(--gold);font-weight:800;margin:0 4px;font-size:14px}
+.rule-ellipsis{color:var(--muted);letter-spacing:.15em;margin:0 3px}
+.rule-note{font-size:11px;color:var(--muted);margin-left:8px}
 #result-table{width:100%;border-collapse:collapse;margin-bottom:16px}
 #result-table th,#result-table td{padding:10px 8px;border-bottom:1px solid var(--line);
   font-size:14px;text-align:right}
