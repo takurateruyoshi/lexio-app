@@ -345,11 +345,17 @@ button.choice.active{
   padding:4px 12px;
 }
 .round-indicator:empty{display:none}
-.top-menu{
-  position:absolute;top:8px;right:12px;z-index:20;
-  display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end;
+.top-menu{position:absolute;top:8px;right:12px;z-index:30}
+#menu-btn{font-size:16px;padding:6px 12px}
+.menu-panel{
+  position:absolute;top:40px;right:0;min-width:170px;
+  display:flex;flex-direction:column;gap:8px;align-items:stretch;
+  background:linear-gradient(180deg,rgba(24,26,32,.97),rgba(10,11,14,.97));
+  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  padding:12px;box-shadow:0 12px 30px rgba(0,0,0,.6);
 }
-.top-menu .toggle{background:rgba(0,0,0,.4);padding:5px 9px;border-radius:8px;
+.menu-panel button{text-align:center}
+.menu-panel .toggle{background:rgba(0,0,0,.4);padding:5px 9px;border-radius:8px;
   border:1px solid var(--line)}
 .net-banner{
   position:absolute;top:46px;left:50%;transform:translateX(-50%);z-index:25;
@@ -539,8 +545,8 @@ button.hint-glow{
   display:flex;align-items:flex-end;padding-left:34px;
 }
 .ncard{
-  position:relative;width:84px;height:120px;padding:0;border:none;
-  border-radius:8px;background:#f4f1e8;margin-left:-34px;
+  position:relative;width:72px;height:104px;padding:0;border:none;
+  border-radius:8px;background:#f4f1e8;margin-left:-30px;
   box-shadow:0 0 0 3px #fff, 0 6px 16px rgba(0,0,0,.6);
   display:flex;flex-direction:column;overflow:hidden;cursor:pointer;
   transform-origin:50% 130%;
@@ -559,7 +565,7 @@ button.hint-glow{
 .ncard.armed:not(:hover){transform:rotate(0deg) translateY(-12px)}
 .ncard.used{opacity:.35;filter:grayscale(.5)}
 .ncard-art{
-  height:42px;flex:none;display:flex;align-items:center;justify-content:center;
+  height:34px;flex:none;display:flex;align-items:center;justify-content:center;
   font-size:28px;text-shadow:0 2px 6px rgba(0,0,0,.5);
 }
 .ncard-title{
@@ -599,19 +605,22 @@ button.hint-glow{
 .tile.gift-mark::before{
   content:"🎁";position:absolute;top:-11px;right:-4px;z-index:2;font-size:12px;
 }
+.tile.gift-hold{opacity:.55;filter:saturate(.6)}
 .tile.joker{outline:2px dashed var(--gold);outline-offset:-2px}
 .tile.joker::after{content:"";position:absolute;inset:0;border-radius:7px;pointer-events:none;
   background:linear-gradient(115deg,rgba(233,196,106,.35) 0%,transparent 40%)}
 
-/* チュートリアルヒント（左サイド・盤面を隠さない） */
+/* チュートリアルヒント（中央下寄り・着手直後は遅れてフェードイン） */
 .tut-hint{
-  position:absolute;left:14px;top:50%;transform:translateY(-50%);z-index:24;
-  width:250px;max-width:30%;max-height:70%;overflow-y:auto;
-  background:linear-gradient(180deg,rgba(24,26,32,.96),rgba(10,11,14,.96));
+  position:absolute;left:50%;top:58%;transform:translate(-50%,-50%);z-index:24;
+  width:min(430px,84%);max-height:52%;overflow-y:auto;text-align:center;
+  background:linear-gradient(180deg,rgba(24,26,32,.95),rgba(10,11,14,.95));
   clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
-  padding:16px 14px;font-size:13px;line-height:1.6;
+  padding:16px 18px;font-size:13.5px;line-height:1.6;
   box-shadow:0 10px 30px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08);
+  opacity:0;pointer-events:none;transition:opacity .45s ease;
 }
+.tut-hint.show{opacity:1;pointer-events:auto}
 .tut-hint b{color:var(--gold)}
 .tut-hint .tut-snippet{margin-top:10px}
 
@@ -728,12 +737,12 @@ button.hint-glow{
   .action-msg{bottom:94px}
   .my-info{bottom:26px;left:8px}
   .my-cards{bottom:4px;right:64px}
-  .tut-hint{width:200px;font-size:11px;padding:10px 10px}
+  .tut-hint{width:min(340px,84%);font-size:11px;padding:10px 12px;max-height:46%}
   .stepper-list{gap:8px}
   .step-value{min-width:140px;padding:8px 0;font-size:15px}
   .stage-title{margin:0 0 10px;font-size:20px}
   .stage-back,.stage-ok{bottom:14px;padding:10px 26px;font-size:15px}
-  .ncard{width:66px;height:96px;margin-left:-28px}
+  .ncard{width:60px;height:88px;margin-left:-26px}
   .ncard:hover{transform:rotate(0deg) translateY(-58px) scale(1.5)}
   .ci-meld .tile.flat{--w:38px;--h:52px}
   .ci-meld .tile.flat .num{font-size:17px}

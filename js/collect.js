@@ -10,6 +10,7 @@ import { getIceServers } from "./netconfig.js";
 const OPTOUT_KEY = "lexio.collect.optout";
 let CFG = { httpUrl: null, p2pId: "lexio-webapp-collect-1", enabled: true };
 let flushing = false;
+let PENDING = [];   // このセッションで積んだ牌譜（pagehide時のsendBeacon用ミラー）
 
 export function isOptedOut() {
   try { return localStorage.getItem(OPTOUT_KEY) === "1"; } catch { return false; }
@@ -33,6 +34,7 @@ export async function queueRecord(rec) {
     ...rec,
     seats: (rec.seats || []).map((s, i) => ({ kind: s.kind, name: `P${i}` })),
   };
+  PENDING.push(anon);
   try {
     const db = await openDb();
     await new Promise((resolve, reject) => {
@@ -42,6 +44,19 @@ export async function queueRecord(rec) {
       tx.onerror = () => reject(tx.error);
     });
     db.close();
+  } catch {}
+}
+
+// ページ離脱時の送信（httpUrl設定時のみ）。gzipなしの素のJSONで送る —
+// Worker側は Content-Encoding ヘッダが無ければそのままJSONとして解釈すること。
+// IndexedDBのoutboxからは消さないため重複し得る（収集側で内容重複を許容/除去する）。
+export function flushBeacon() {
+  if (isOptedOut() || !CFG.enabled || !CFG.httpUrl || !PENDING.length) return;
+  try {
+    const ok = navigator.sendBeacon(
+      CFG.httpUrl,
+      new Blob([JSON.stringify({ v: 1, records: PENDING })], { type: "application/json" }));
+    if (ok) PENDING = [];
   } catch {}
 }
 
@@ -141,6 +156,7 @@ export async function flushOutbox() {
       try {
         await sendHttp(records);
         await deleteKeys(batch.map((b) => b.key));
+        PENDING = [];
         return;
       } catch { /* HTTP失敗 → P2Pへフォールバック */ }
     }
@@ -148,6 +164,7 @@ export async function flushOutbox() {
       try {
         await sendP2P(records);
         await deleteKeys(batch.map((b) => b.key));
+        PENDING = [];
       } catch { /* 収集ピア不在 — キュー保持 */ }
     }
   } finally {

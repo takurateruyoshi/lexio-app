@@ -2,7 +2,7 @@
 // 出典: LexioNeo 同梱スペシャルカード（各自3枚配布・1ラウンド1枚まで）。
 // 現在は効果が確定している9種13枚を実装（残り5種はカード文言の確認後に追加予定）。
 "use strict";
-import { shuffle } from "./engine.js";
+import { shuffle, classify, beats, tileRank } from "./engine.js";
 
 export const JOKER_BASE = 1000;   // 仮想牌ID = 1000 + rank*4 + suit
 export const isJokerTile = (t) => t >= JOKER_BASE;
@@ -32,6 +32,23 @@ export const CARD_DEFS = {
   helping_hand: { type: "ending", name: "救いの手", en: "Helping Hand", icon: "🤝", copies: 1,
     desc: "精算時・最下位のみ。自分の支払いを各プレイヤー1点ずつに軽減します" },
 };
+
+// ジョーカーの代用数字の候補を自動列挙する。
+// tileIds: 一緒に出す牌 / currentTiles: 場の役の牌ID配列（リード時は null）。
+// 候補 = 範囲内 && 同時に出す牌と異なる数字 && 役として成立 && 場を上回る。
+export function jokerRankCandidates(tileIds, cardSuit, numPlayers, maxRank, currentTiles) {
+  const range = jokerRange(numPlayers);
+  if (!range) return [];
+  const cur = currentTiles && currentTiles.length ? classify(currentTiles, maxRank) : null;
+  const used = new Set(tileIds.map((t) => tileRank(t)));
+  const out = [];
+  for (let r = range[0]; r <= range[1]; r++) {
+    if (used.has(r)) continue;
+    const cand = classify([...tileIds, JOKER_BASE + r * 4 + cardSuit], maxRank);
+    if (cand && beats(cand, cur)) out.push(r);
+  }
+  return out;
+}
 
 // シャッフル済みデッキ（実装済みカードのみ）
 export function buildDeck() {
