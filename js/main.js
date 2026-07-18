@@ -525,11 +525,17 @@ function renderNeoUI(view) {
   wrap.innerHTML = "";
   for (const c of view.myCards) {
     const b = document.createElement("button");
-    b.className = "card-chip" + (armedCard && armedCard.id === c.id ? " armed" : "")
-      + (view.cardUsed ? " disabled" : "");
-    b.innerHTML = `${c.icon} ${c.name}`;
-    b.title = c.desc;
+    b.className = "ncard art-" + c.id + (armedCard && armedCard.id === c.id ? " armed" : "")
+      + (view.cardUsed ? " used" : "");
     b.disabled = view.cardUsed || view.terminal;
+    b.innerHTML = `
+      <span class="ncard-art">${c.icon}</span>
+      <span class="ncard-title"><b>${c.en}</b><i>${c.name}</i></span>
+      <span class="ncard-big art-${c.id}">
+        <span class="ncard-big-art">${c.icon}</span>
+        <span class="ncard-big-title"><b>${c.en}</b> ${c.name}</span>
+        <span class="ncard-big-desc">${c.desc}</span>
+      </span>`;
     b.addEventListener("click", () => {
       if (c.id === "new_beginning") {
         if (!view.canNewBeginning) { setActionMessage("配牌直後（最初の牌が出る前）のみ使えます"); return; }
