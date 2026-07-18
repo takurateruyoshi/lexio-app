@@ -17,13 +17,13 @@ const SEEN_KEY = "lexio.seen.v1";
 let session = null;      // {mode:'solo'|'host'|'guest'|'spectate', ...}
 let lastView = null;
 let reconnecting = null;
-const setup = { size: 3, ai: 0, rule: "classic" };   // 対戦設定の状態
+const setup = { size: 3, ai: 0, rule: "classic", rounds: 3, limit: 0, games: 3 };   // 対戦設定の状態
 let armedCard = null;   // Neo: 使用準備中のカード {id, rank?, target?, gift?}
 
 const storedName = () => { try { return localStorage.getItem(NAME_KEY) || "あなた"; } catch { return "あなた"; } };
 const saveName = (n) => { try { localStorage.setItem(NAME_KEY, n); } catch {} };
-const numRounds = () => Math.max(1, Math.min(99, parseInt($("num-rounds").value, 10) || 1));
-const turnLimit = () => parseInt($("turn-limit").value, 10) || 0;
+const numRounds = () => Math.max(1, Math.min(99, setup.rounds));
+const turnLimit = () => setup.limit;
 const showHistory = () => $("history-toggle").checked;
 
 function rerender() { if (lastView) onViewUpdate(lastView); }
@@ -54,8 +54,14 @@ function renderBanner(view) {
       <button id="endcard-no" class="ghost small">見送る</button>`;
   } else if (view && view.settling) {
     html = "🃏 他のプレイヤーがスペシャルカードを検討中…";
-  } else if (session && session.mode === "tutorial" && session.tut) {
-    html = session.tut.instructionHtml();
+  }
+  const th = $("tut-hint");
+  if (!html && session && session.mode === "tutorial" && session.tut) {
+    th.innerHTML = session.tut.instructionHtml();
+    th.classList.remove("hidden");
+  } else {
+    th.innerHTML = "";
+    th.classList.add("hidden");
   }
   b.innerHTML = html;
   b.classList.toggle("hidden", !html);
@@ -130,46 +136,48 @@ function goSetup() {
   renderSetup();
 }
 
+const LIMIT_STEPS = [0, 15, 30, 60];
+
+function stepSetting(k, d) {
+  if (k === "size") setup.size = 2 + ((setup.size - 2 + d + 4) % 4);
+  else if (k === "ai") setup.ai = (setup.ai + d + setup.size + 1) % (setup.size + 1);
+  else if (k === "rule") setup.rule = setup.rule === "classic" ? "neo" : "classic";
+  else if (k === "rounds") setup.rounds = Math.max(1, Math.min(99, setup.rounds + d));
+  else if (k === "limit") {
+    const i = LIMIT_STEPS.indexOf(setup.limit);
+    setup.limit = LIMIT_STEPS[(i + d + LIMIT_STEPS.length) % LIMIT_STEPS.length];
+  } else if (k === "games") setup.games = Math.max(1, Math.min(100, setup.games + d));
+  renderSetup();
+}
+
 function renderSetup() {
-  // 卓の人数
-  document.querySelectorAll("#size-buttons .choice").forEach((b) => {
-    b.classList.toggle("active", parseInt(b.dataset.size, 10) === setup.size);
-  });
-  // AI席数 0..size
-  const ab = $("ai-buttons");
-  ab.innerHTML = "";
   if (setup.ai > setup.size) setup.ai = setup.size;
-  for (let k = 0; k <= setup.size; k++) {
-    const btn = document.createElement("button");
-    btn.className = "choice" + (k === setup.ai ? " active" : "");
-    btn.textContent = `${k}`;
-    btn.addEventListener("click", () => { setup.ai = k; renderSetup(); });
-    ab.appendChild(btn);
-  }
-  // プレビューとボタンラベル
   const remaining = setup.size - setup.ai;   // 人間枠（あなた含む）
+  const neoOk = setup.size >= 3 && remaining !== 0;
+  if (!neoOk) setup.rule = "classic";
+  $("val-size").textContent = `${setup.size}人`;
+  $("val-ai").textContent = `${setup.ai}人`;
+  $("val-rule").textContent = setup.rule === "neo" ? "Neo" : "クラシック";
+  $("val-rounds").textContent = `${setup.rounds}回`;
+  $("val-limit").textContent = setup.limit === 0 ? "なし" : `${setup.limit}秒`;
+  $("val-games").textContent = `${setup.games}局`;
+  $("row-rule").classList.toggle("disabled", !neoOk);
   const preview = $("seat-preview");
   const go = $("setup-go-btn");
   if (remaining === 0) {
     preview.textContent = `全席AI（AI×${setup.size}） — AI同士の対局を観戦・記録します`;
-    go.textContent = "🔬 観戦を開始";
+    go.textContent = "観戦を開始 ▶";
   } else if (remaining === 1) {
     preview.textContent = `あなた + AI×${setup.ai} — すぐに対局が始まります`;
-    go.textContent = "▶ ソロで開始";
+    go.textContent = "ソロで開始 ▶";
   } else {
     preview.textContent = `あなた + 募集 ${remaining - 1}人 + AI×${setup.ai}` +
       `（開始時に空いている募集席はAIが埋めます）`;
-    go.textContent = "🏠 部屋を作る";
+    go.textContent = "部屋を作る ▶";
   }
-  $("spectate-opts").classList.toggle("hidden", remaining !== 0);
-  $("turn-limit-block").classList.toggle("hidden", remaining === 0);
-  // ルール選択（Neoは3人以上・対人/ソロのみ）
-  const neoOk = setup.size >= 3 && remaining !== 0;
-  if (!neoOk) setup.rule = "classic";
-  document.querySelectorAll("#rule-buttons .choice").forEach((b) => {
-    b.classList.toggle("active", b.dataset.rule === setup.rule);
-    if (b.dataset.rule === "neo") b.disabled = !neoOk;
-  });
+  $("row-games").classList.toggle("hidden", remaining !== 0);
+  $("precise-row").classList.toggle("hidden", remaining !== 0);
+  $("row-limit").classList.toggle("hidden", remaining === 0);
   $("rule-note").textContent = setup.rule === "neo"
     ? "各自スペシャルカード3枚・1ラウンド1枚まで（AIはまだカードを使いません）"
     : (neoOk ? "" : "Neoは3人以上の対人/ソロで選べます");
@@ -389,7 +397,7 @@ function startSpectate() {
     mode: "spectate",
     n: setup.size,
     rounds: numRounds(),
-    gamesTarget: Math.max(1, Math.min(100, parseInt($("num-games").value, 10) || 1)),
+    gamesTarget: Math.max(1, Math.min(100, setup.games)),
     gamesDone: 0,
     precise: $("precise-toggle").checked,
   };
@@ -729,12 +737,9 @@ window.addEventListener("DOMContentLoaded", () => {
   $("collect-toggle").checked = !isOptedOut();
   $("collect-toggle").addEventListener("change", () => setOptOut(!$("collect-toggle").checked));
 
-  // 対戦設定
-  document.querySelectorAll("#size-buttons .choice").forEach((b) => {
-    b.addEventListener("click", () => { setup.size = parseInt(b.dataset.size, 10); renderSetup(); });
-  });
-  document.querySelectorAll("#rule-buttons .choice").forEach((b) => {
-    b.addEventListener("click", () => { setup.rule = b.dataset.rule; renderSetup(); });
+  // 対戦設定（ステッパー）
+  document.querySelectorAll(".step-btn").forEach((b) => {
+    b.addEventListener("click", () => stepSetting(b.dataset.k, parseInt(b.dataset.d, 10)));
   });
   $("setup-go-btn").addEventListener("click", setupGo);
   $("setup-back-btn").addEventListener("click", () => showScreen("title"));

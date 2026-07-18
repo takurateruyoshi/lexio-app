@@ -39,58 +39,55 @@
   </section>
 
   <!-- 対戦設定 -->
-  <section id="screen-setup" class="panel hidden">
-    <h1>対戦設定</h1>
-    <div class="setup-block">
-      <div class="setup-label">卓の人数</div>
-      <div id="size-buttons" class="choice-row">
-        <button data-size="2" class="choice">2人</button>
-        <button data-size="3" class="choice active">3人</button>
-        <button data-size="4" class="choice">4人</button>
-        <button data-size="5" class="choice">5人</button>
+  <section id="screen-setup" class="hidden">
+    <div id="setup-stage">
+      <h1 class="stage-title">対戦設定</h1>
+      <div class="stepper-list">
+        <div class="stepper-row">
+          <span class="stepper-label">卓の人数</span>
+          <button class="step-btn" data-k="size" data-d="-1">◀</button>
+          <span class="step-value" id="val-size">3人</span>
+          <button class="step-btn" data-k="size" data-d="1">▶</button>
+        </div>
+        <div class="stepper-row">
+          <span class="stepper-label">AIの席数</span>
+          <button class="step-btn" data-k="ai" data-d="-1">◀</button>
+          <span class="step-value" id="val-ai">0人</span>
+          <button class="step-btn" data-k="ai" data-d="1">▶</button>
+        </div>
+        <div class="stepper-row" id="row-rule">
+          <span class="stepper-label">ルール</span>
+          <button class="step-btn" data-k="rule" data-d="-1">◀</button>
+          <span class="step-value" id="val-rule">クラシック</span>
+          <button class="step-btn" data-k="rule" data-d="1">▶</button>
+        </div>
+        <div class="stepper-row">
+          <span class="stepper-label">ラウンド数</span>
+          <button class="step-btn" data-k="rounds" data-d="-1">◀</button>
+          <span class="step-value" id="val-rounds">3回</span>
+          <button class="step-btn" data-k="rounds" data-d="1">▶</button>
+        </div>
+        <div class="stepper-row" id="row-limit">
+          <span class="stepper-label">思考時間</span>
+          <button class="step-btn" data-k="limit" data-d="-1">◀</button>
+          <span class="step-value" id="val-limit">なし</span>
+          <button class="step-btn" data-k="limit" data-d="1">▶</button>
+        </div>
+        <div class="stepper-row hidden" id="row-games">
+          <span class="stepper-label">連続対局数</span>
+          <button class="step-btn" data-k="games" data-d="-1">◀</button>
+          <span class="step-value" id="val-games">3局</span>
+          <button class="step-btn" data-k="games" data-d="1">▶</button>
+        </div>
       </div>
-    </div>
-    <div class="setup-block">
-      <div class="setup-label">AIの席数</div>
-      <div id="ai-buttons" class="choice-row"></div>
       <p id="seat-preview" class="seat-preview"></p>
-    </div>
-    <div class="setup-block" id="rule-block">
-      <div class="setup-label">ルール</div>
-      <div id="rule-buttons" class="choice-row">
-        <button data-rule="classic" class="choice active">クラシック</button>
-        <button data-rule="neo" class="choice">Neo</button>
-      </div>
       <p id="rule-note" class="hint"></p>
+      <label id="precise-row" class="toggle hidden"><input id="precise-toggle" type="checkbox">
+        精密思考（1手1秒・研究用）</label>
+      <p class="hint" id="setup-hint"></p>
+      <button id="setup-back-btn" class="stage-back">◀ BACK</button>
+      <button id="setup-go-btn" class="stage-ok">OK ▶</button>
     </div>
-    <div class="setup-block setup-inline">
-      <label>ラウンド数
-        <input id="num-rounds" type="number" min="1" max="99" value="3">
-      </label>
-      <label id="turn-limit-block">思考時間
-        <select id="turn-limit">
-          <option value="0" selected>なし</option>
-          <option value="15">15秒</option>
-          <option value="30">30秒</option>
-          <option value="60">60秒</option>
-        </select>
-      </label>
-    </div>
-    <div id="spectate-opts" class="setup-block hidden">
-      <div class="setup-label">観戦オプション</div>
-      <div class="setup-row">
-        <label>連続対局数
-          <input id="num-games" type="number" min="1" max="100" value="3">
-        </label>
-        <label class="toggle"><input id="precise-toggle" type="checkbox">
-          精密思考（1手1秒・研究用）</label>
-      </div>
-    </div>
-    <div class="setup-row">
-      <button id="setup-go-btn" class="primary big">部屋を作る</button>
-      <button id="setup-back-btn" class="ghost">戻る</button>
-    </div>
-    <p class="hint" id="setup-hint"></p>
   </section>
 
   <!-- ロビー -->
@@ -124,6 +121,7 @@
       <div id="center-info" class="center-info"></div>
 
       <div id="round-indicator" class="round-indicator"></div>
+      <div id="tut-hint" class="tut-hint hidden"></div>
       <div class="top-menu">
         <label class="toggle spectate-only hidden"><input id="reveal-toggle" type="checkbox" checked>手札公開</label>
         <select id="speed-select" class="spectate-only hidden">

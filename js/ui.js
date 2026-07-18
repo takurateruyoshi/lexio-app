@@ -168,10 +168,11 @@ export function renderGame(view, opts = {}) {
     mh.appendChild(el);
   }
 
-  // ボタンは必要な時だけ出す（パス=左 / 出す=右）
-  $("pass-btn").classList.toggle("hidden", !view.canPass);
+  // ボタンは対局中は常時表示（パス=左 / 出す=右）。押せない時はdisabledで安定表示
+  const showBtns = !view.terminal && view.yourHand && view.yourHand.length > 0;
+  $("pass-btn").classList.toggle("hidden", !showBtns);
   $("pass-btn").disabled = !view.canPass;
-  $("play-wrap").classList.toggle("hidden", !myTurn);
+  $("play-wrap").classList.toggle("hidden", !showBtns);
   $("play-btn").disabled = true;
 
   if (view.terminal && view.scores) showResult(view);
@@ -261,7 +262,23 @@ export function renderLobbyTable(seats) {
         ? `<div class="avatar" style="--hue:220;filter:grayscale(.4)"><span>🤖</span></div>`
         : `<div class="avatar" style="--hue:${hue}"><span>${(s.name || "?").slice(0, 1)}</span></div>`;
     el.innerHTML = `<div class="seat-info">${avatar}
-      <div class="id-badge">${s.kind === "open" ? "募集中" : s.name}</div></div>`;
+      <div class="id-badge">${s.kind === "open" ? "＋ 招待する" : s.name}</div></div>`;
+    if (s.kind === "open") {
+      el.classList.add("invitable");
+      el.addEventListener("click", () => {
+        const url = $("invite-link").value;
+        if (navigator.share) {
+          navigator.share({ title: "レキシオで対戦しよう", url }).catch(() => {});
+        } else if (navigator.clipboard) {
+          navigator.clipboard.writeText(url);
+          const b = el.querySelector(".id-badge");
+          if (b) {
+            b.textContent = "リンクをコピーしました";
+            setTimeout(() => { b.textContent = "＋ 招待する"; }, 1400);
+          }
+        }
+      });
+    }
     tb.appendChild(el);
   }
 }
