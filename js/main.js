@@ -4,7 +4,7 @@
 import { GameController } from "./game.js";
 import { HostSession, GuestSession, STORE_GUEST } from "./net.js";
 import { $, renderGame, setActionMessage, selectedTiles, clearSelection, showScreen, buildRulesContent, showPrevResult, renderLobbyTable } from "./ui.js";
-import { CARD_DEFS, jokerRankCandidates } from "./cards.js";
+import { CARD_DEFS, jokerPlayOptions } from "./cards.js";
 import { loadModel, getTheta } from "./model.js";
 import { saveGameRecord, exportRecordsToFile, countRecords, annotateBlocking } from "./replay.js";
 import { Tutorial } from "./tutorial.js";
@@ -514,14 +514,17 @@ function doPlay() {
   if (armedCard) {
     if (armedCard.id.startsWith("joker") && armedCard.rank == null) {
       if (!tiles.length) { setActionMessage("ジョーカーと一緒に出す牌を選んでください"); return; }
-      const cands = jokerRankCandidates(
+      const opts = jokerPlayOptions(
         tiles, CARD_DEFS[armedCard.id].suit, lastView.numPlayers, lastView.maxRank,
         lastView.currentMeld ? lastView.currentMeld.tiles.map((t) => t.id) : null);
-      if (cands.length === 0) { setActionMessage("この牌とジョーカーでは役になりません"); return; }
-      if (cands.length === 1) {
-        armedCard.rank = cands[0];
+      if (opts.length === 0) {
+        setActionMessage("この牌とジョーカーでは場に出せる役になりません");
+        return;
+      }
+      if (opts.length === 1) {
+        armedCard.rank = opts[0].rank;   // 役として一意 → 自動で確定
       } else {
-        armedCard.choices = cands;   // 複数候補 → どの数字として出すか質問
+        armedCard.choices = opts;        // 役の選択肢が複数（例: FHかクワッズか）→ 質問
         renderNeoUI(lastView);
         return;
       }
@@ -608,13 +611,13 @@ function renderNeoUI(view) {
   ctx.classList.remove("hidden");
   if (armedCard.id.startsWith("joker")) {
     if (armedCard.choices) {
-      ctx.append("どの数字として出す？ ");
-      for (const r of armedCard.choices) {
+      ctx.append("どの役で出す？ ");
+      for (const o of armedCard.choices) {
         const b = document.createElement("button");
         b.className = "ghost small";
-        b.textContent = String(r);
+        b.textContent = o.label;
         b.addEventListener("click", () => {
-          armedCard.rank = r;
+          armedCard.rank = o.rank;
           delete armedCard.choices;
           doPlay();
         });

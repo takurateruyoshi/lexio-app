@@ -2,7 +2,8 @@
 // 出典: LexioNeo 同梱スペシャルカード（各自3枚配布・1ラウンド1枚まで）。
 // 現在は効果が確定している9種13枚を実装（残り5種はカード文言の確認後に追加予定）。
 "use strict";
-import { shuffle, classify, beats } from "./engine.js";
+import { shuffle, classify, beats,
+  CAT_STRAIGHT, CAT_FLUSH, CAT_FULLHOUSE, CAT_FOURPLUS, CAT_STRAIGHTFLUSH } from "./engine.js";
 
 export const JOKER_BASE = 1000;   // 仮想牌ID = 1000 + rank*4 + suit
 export const isJokerTile = (t) => t >= JOKER_BASE;
@@ -33,9 +34,35 @@ export const CARD_DEFS = {
     desc: "精算時・最下位のみ。自分の支払いを各プレイヤー1点ずつに軽減します" },
 };
 
-// ジョーカーの代用数字の候補を自動列挙する。
+const CAT_NAMES = {
+  [CAT_STRAIGHT]: "ストレート", [CAT_FLUSH]: "フラッシュ", [CAT_FULLHOUSE]: "フルハウス",
+  [CAT_FOURPLUS]: "フォーカード", [CAT_STRAIGHTFLUSH]: "ストレートフラッシュ",
+};
+const meldName = (m) =>
+  m.size === 1 ? "単騎" : m.size === 2 ? "ペア" : m.size === 3 ? "トリプル"
+    : CAT_NAMES[m.category] || "役";
+
+// ジョーカーの代用数字を自動列挙する。
 // tileIds: 一緒に出す牌 / currentTiles: 場の役の牌ID配列（リード時は null）。
-// 候補 = 範囲内 && 同一の牌（同色同数字）と重複しない && 役として成立 && 場を上回る。
+// 範囲内の全数字を試し、役として成立し場を上回るものを列挙。
+// 役として同一（強さの鍵が同じ — 例: フォーカードのおまけ牌違い）はまとめる。
+// 戻り値: [{rank, label}] — 1件なら呼び出し側が自動でその数字を採用する。
+export function jokerPlayOptions(tileIds, cardSuit, numPlayers, maxRank, currentTiles) {
+  const range = jokerRange(numPlayers);
+  if (!range) return [];
+  const cur = currentTiles && currentTiles.length ? classify(currentTiles, maxRank) : null;
+  const seen = new Map();   // key(JSON) → {rank, label}
+  for (let r = range[0]; r <= range[1]; r++) {
+    if (tileIds.includes(r * 4 + cardSuit)) continue;   // 同一牌との重複のみ不可
+    const cand = classify([...tileIds, JOKER_BASE + r * 4 + cardSuit], maxRank);
+    if (!cand || !beats(cand, cur)) continue;
+    const k = JSON.stringify(cand.key);
+    if (!seen.has(k)) seen.set(k, { rank: r, label: `${r}（${meldName(cand)}）` });
+  }
+  return [...seen.values()];
+}
+
+// 後方互換: 数字のみの候補列挙
 export function jokerRankCandidates(tileIds, cardSuit, numPlayers, maxRank, currentTiles) {
   const range = jokerRange(numPlayers);
   if (!range) return [];
