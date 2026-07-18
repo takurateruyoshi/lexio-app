@@ -3,7 +3,7 @@
 "use strict";
 import { GameController } from "./game.js";
 import { HostSession, GuestSession, STORE_GUEST } from "./net.js";
-import { $, renderGame, setActionMessage, selectedTiles, showScreen, buildRulesContent, showPrevResult } from "./ui.js";
+import { $, renderGame, setActionMessage, selectedTiles, showScreen, buildRulesContent, showPrevResult, renderLobbyTable } from "./ui.js";
 import { loadModel, getTheta } from "./model.js";
 import { saveGameRecord, exportRecordsToFile, countRecords, annotateBlocking } from "./replay.js";
 import { Tutorial } from "./tutorial.js";
@@ -204,6 +204,7 @@ function startTutorial() {
     lastView = view;
     renderGame(view, { showHistory: true, selectableIds: t.selectable() });
     renderBanner(view);
+    renderNeoUI(view);   // チュートリアルはNeo無効 → カード表示をクリア
     $("pass-btn").classList.toggle("hint-glow", t.expectPass());
     $("result-again").classList.remove("hidden");
     $("result-again").textContent = "もう一度チュートリアル";
@@ -364,16 +365,12 @@ function resumeGuest(saved) {
 }
 
 function renderLobby(seats) {
-  const el = $("lobby-seats");
-  el.innerHTML = "";
-  for (const s of seats) {
-    const d = document.createElement("div");
-    d.className = "lobby-seat " + s.kind;
-    const kindLabel = { human: "ホスト", remote: "参加者", open: "リンク/コードで参加可能",
-                        ai: "AI" }[s.kind] || "";
-    d.innerHTML = `<span class="seat-no">席${s.seat + 1}</span> <b>${s.name}</b> <span class="k">${kindLabel}</span>`;
-    el.appendChild(d);
-  }
+  renderLobbyTable(seats);
+  const open = seats.filter((s) => s.kind === "open").length;
+  const remote = seats.filter((s) => s.kind === "remote").length;
+  $("lobby-status").textContent = remote > 0 || open === 0
+    ? `参加者 ${remote}人 — いつでも開始できます（空席はAIが埋めます）`
+    : "参加を待っています…（今すぐ開始もできます）";
 }
 
 // ============================== 観戦 ==============================
@@ -417,6 +414,7 @@ function onSpectateUpdate() {
   const view = ctrl.view(0, $("reveal-toggle").checked);
   lastView = view;
   renderGame(view, { showHistory: showHistory() });
+  renderNeoUI(view);
   $("round-indicator").textContent =
     `観戦 ${session.gamesDone + 1}/${session.gamesTarget}局　ラウンド ${view.round}/${view.totalRounds}`;
   $("result-again").classList.add("hidden");
@@ -520,6 +518,8 @@ function renderNeoUI(view) {
   const wrap = $("my-cards");
   const ctx = $("card-ctx");
   if (!view || !view.neo || !view.myCards || (session && session.mode === "spectate")) {
+    document.querySelectorAll(".seat-info.targetable")
+      .forEach((el) => el.classList.remove("targetable"));
     wrap.innerHTML = ""; ctx.classList.add("hidden"); return;
   }
   wrap.innerHTML = "";
@@ -531,11 +531,7 @@ function renderNeoUI(view) {
     b.innerHTML = `
       <span class="ncard-art">${c.icon}</span>
       <span class="ncard-title"><b>${c.en}</b><i>${c.name}</i></span>
-      <span class="ncard-big art-${c.id}">
-        <span class="ncard-big-art">${c.icon}</span>
-        <span class="ncard-big-title"><b>${c.en}</b> ${c.name}</span>
-        <span class="ncard-big-desc">${c.desc}</span>
-      </span>`;
+      <span class="ncard-desc">${c.desc}</span>`;
     b.addEventListener("click", () => {
       if (c.id === "new_beginning") {
         if (!view.canNewBeginning) { setActionMessage("配牌直後（最初の牌が出る前）のみ使えます"); return; }
@@ -547,35 +543,41 @@ function renderNeoUI(view) {
     });
     wrap.appendChild(b);
   }
-  // コンテキスト（数字・対象・渡す牌の選択）
+  // コンテキスト: ジョーカーは数字ボタン、対象/渡す牌は盤面から直接タップ
   ctx.innerHTML = "";
+  // 対象選択中は相手アバターを光らせる
+  const needTarget = armedCard &&
+    (armedCard.id === "lost_right" || armedCard.id === "unwanted_gift") &&
+    armedCard.target == null;
+  document.querySelectorAll(".seat-info").forEach((el) => {
+    el.classList.toggle("targetable", !!needTarget);
+  });
+  // 渡す牌の選択中/選択済みマーク
+  document.querySelectorAll(".tile.gift-mark").forEach((el) => el.classList.remove("gift-mark"));
+  if (armedCard && armedCard.id === "unwanted_gift" && armedCard.gift != null) {
+    const tile = document.querySelector(`#my-hand .tile[data-id="${armedCard.gift}"]`);
+    if (tile) tile.classList.add("gift-mark");
+  }
   if (!armedCard) { ctx.classList.add("hidden"); return; }
   ctx.classList.remove("hidden");
-  const addBtn = (label, on, active) => {
-    const b = document.createElement("button");
-    b.className = "ghost small" + (active ? " active-choice" : "");
-    b.textContent = label;
-    b.addEventListener("click", () => { on(); renderNeoUI(view); });
-    ctx.appendChild(b);
-  };
   if (armedCard.id.startsWith("joker")) {
     const range = { 3: [3, 5], 4: [3, 6], 5: [3, 7] }[view.numPlayers];
     ctx.append("代用する数字: ");
     for (let r = range[0]; r <= range[1]; r++) {
-      addBtn(String(r), () => { armedCard.rank = r; }, armedCard.rank === r);
+      const b = document.createElement("button");
+      b.className = "ghost small" + (armedCard.rank === r ? " active-choice" : "");
+      b.textContent = String(r);
+      b.addEventListener("click", () => { armedCard.rank = r; renderNeoUI(view); });
+      ctx.appendChild(b);
     }
+  } else if (needTarget) {
+    ctx.append(armedCard.id === "lost_right"
+      ? "👉 強制パスさせる相手のアイコンをタップ"
+      : "👉 渡す相手のアイコンをタップ");
+  } else if (armedCard.id === "unwanted_gift" && armedCard.gift == null) {
+    ctx.append(`👉 ${view.players[armedCard.target].name} に渡す牌を手牌からタップ`);
   } else {
-    ctx.append(armedCard.id === "lost_right" ? "強制パスさせる相手: " : "渡す相手: ");
-    for (const p of view.players) {
-      if (p.isYou || p.finished) continue;
-      addBtn(p.name, () => { armedCard.target = p.index; }, armedCard.target === p.index);
-    }
-    if (armedCard.id === "unwanted_gift" && armedCard.target != null) {
-      ctx.append(" 渡す牌: ");
-      for (const t of view.yourHand) {
-        addBtn(`${t.rank}${t.glyph}`, () => { armedCard.gift = t.id; }, armedCard.gift === t.id);
-      }
-    }
+    ctx.append("あとは出す牌を選んで「出す」");
   }
 }
 function CARD_DEFS_TYPE(c) { return c.type; }
@@ -793,6 +795,27 @@ window.addEventListener("DOMContentLoaded", () => {
   window.addEventListener("beforeunload", (e) => {
     if (session && lastView && !lastView.matchOver && session.mode !== "spectate") e.preventDefault();
   });
+
+  // Neo: 相手アイコン/手牌からの直接選択
+  $("table3d").addEventListener("click", (e) => {
+    if (!armedCard || armedCard.target != null) return;
+    if (armedCard.id !== "lost_right" && armedCard.id !== "unwanted_gift") return;
+    const el = e.target.closest(".seat-info");
+    if (!el || el.dataset.seat === undefined) return;
+    e.stopPropagation();
+    armedCard.target = parseInt(el.dataset.seat, 10);
+    if (lastView) renderNeoUI(lastView);
+  }, true);
+  $("my-hand").addEventListener("click", (e) => {
+    if (!(armedCard && armedCard.id === "unwanted_gift" &&
+          armedCard.target != null && armedCard.gift == null)) return;
+    const el = e.target.closest(".tile");
+    if (!el) return;
+    e.stopPropagation();
+    e.preventDefault();
+    armedCard.gift = parseInt(el.dataset.id, 10);
+    if (lastView) renderNeoUI(lastView);
+  }, true);
 
   // 思考時間の残りカウントダウン（出すボタンの隣に表示）
   setInterval(() => {

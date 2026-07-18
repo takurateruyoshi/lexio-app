@@ -51,30 +51,30 @@
       </div>
     </div>
     <div class="setup-block">
-      <div class="setup-label">AIの席数（残りは人間の席。全席AIにするとAI同士の対局を観戦できます）</div>
+      <div class="setup-label">AIの席数</div>
       <div id="ai-buttons" class="choice-row"></div>
       <p id="seat-preview" class="seat-preview"></p>
-    </div>
-    <div class="setup-block">
-      <div class="setup-label">ラウンド数（1〜99）</div>
-      <input id="num-rounds" type="number" min="1" max="99" value="3">
     </div>
     <div class="setup-block" id="rule-block">
       <div class="setup-label">ルール</div>
       <div id="rule-buttons" class="choice-row">
         <button data-rule="classic" class="choice active">クラシック</button>
-        <button data-rule="neo" class="choice">Neo（スペシャルカード）</button>
+        <button data-rule="neo" class="choice">Neo</button>
       </div>
       <p id="rule-note" class="hint"></p>
     </div>
-    <div class="setup-block" id="turn-limit-block">
-      <div class="setup-label">思考時間の制限（時間切れは自動でパス/最弱リード）</div>
-      <select id="turn-limit">
-        <option value="0" selected>なし</option>
-        <option value="15">15秒</option>
-        <option value="30">30秒</option>
-        <option value="60">60秒</option>
-      </select>
+    <div class="setup-block setup-inline">
+      <label>ラウンド数
+        <input id="num-rounds" type="number" min="1" max="99" value="3">
+      </label>
+      <label id="turn-limit-block">思考時間
+        <select id="turn-limit">
+          <option value="0" selected>なし</option>
+          <option value="15">15秒</option>
+          <option value="30">30秒</option>
+          <option value="60">60秒</option>
+        </select>
+      </label>
     </div>
     <div id="spectate-opts" class="setup-block hidden">
       <div class="setup-label">観戦オプション</div>
@@ -94,27 +94,26 @@
   </section>
 
   <!-- ロビー -->
-  <section id="screen-lobby" class="panel hidden">
-    <h1>部屋コード <span id="room-code" class="room-code">-----</span></h1>
-    <div class="setup-row">
-      <label>あなたの名前
-        <input id="player-name" type="text" value="あなた" maxlength="20">
-      </label>
-    </div>
-    <div class="invite-box">
-      <div class="setup-label">友達を招待（リンクを開くだけで参加できます）</div>
-      <div class="invite-row">
-        <input id="invite-link" type="text" readonly>
-        <button id="copy-link-btn" class="ghost small">リンクをコピー</button>
-        <button id="share-link-btn" class="ghost small hidden">共有</button>
-        <button id="copy-code-btn" class="ghost small">コードをコピー</button>
+  <section id="screen-lobby" class="hidden">
+    <div id="lobby-stage">
+      <div class="lobby-code-badge">部屋コード <b id="room-code">-----</b>
+        <button id="copy-code-btn" class="ghost small">コピー</button></div>
+      <div id="lobby-seats" class="table3d"></div>
+      <div class="lobby-center">
+        <div class="lobby-invite">
+          <input id="invite-link" type="text" readonly>
+          <button id="copy-link-btn" class="ghost small">リンクをコピー</button>
+          <button id="share-link-btn" class="ghost small hidden">共有</button>
+        </div>
+        <p class="hint" id="lobby-status"></p>
       </div>
-    </div>
-    <div id="lobby-seats" class="lobby-seats"></div>
-    <p class="hint" id="lobby-status"></p>
-    <div class="setup-row">
-      <button id="start-room-btn" class="primary">開始する（空席はAIが埋めます）</button>
-      <button id="lobby-leave-btn" class="ghost">退出</button>
+      <div class="lobby-bottom">
+        <label class="lobby-name">名前
+          <input id="player-name" type="text" value="あなた" maxlength="20">
+        </label>
+        <button id="start-room-btn" class="primary">開始する</button>
+        <button id="lobby-leave-btn" class="ghost">退出</button>
+      </div>
     </div>
   </section>
 

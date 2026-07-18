@@ -78,14 +78,13 @@ function renderTable(view, showHistory) {
       const info = document.createElement("div");
       info.className = "seat-info";
       const hue = AVATAR_HUES[p.index % AVATAR_HUES.length];
+      info.dataset.seat = p.index;
       info.innerHTML = `
         <div class="avatar" style="--hue:${hue}">
           <span>${(p.name || "?").slice(0, 1)}</span>
           <span class="count-badge">×${p.count}</span>
         </div>
-        <div class="seat-name">${p.name}${p.finished ? " 👑" : ""}
-          <span class="kind-dot ${p.kind === "ai" ? "ai" : "human"}"></span></div>
-        <div class="seat-points">${p.points}点${view.cardCounts ? `　🃏${view.cardCounts[p.index]}` : ""}</div>`;
+        <div class="id-badge">${p.name}${p.finished ? " 👑" : ""}<b>${p.points}点</b>${view.cardCounts ? `<i>🃏${view.cardCounts[p.index]}</i>` : ""}</div>`;
       if (histEl) info.appendChild(histEl);
       seat.appendChild(info);
     }
@@ -110,7 +109,6 @@ function renderTable(view, showHistory) {
       const latest = plays[plays.length - 1];
       if (view.currentMeld && view.lastPlayerSeat === p.index) mv.classList.add("live");
       for (const t of latest.tiles) mv.appendChild(tileEl(t, "flat", false));
-      if (mv.lastChild) mv.lastChild.classList.add("top-tile");  // 役の強さを決める最強牌
     }
     if (p.passed && view.currentMeld) {
       const pc = document.createElement("div");
@@ -133,7 +131,6 @@ function renderCenter(view) {
   const meld = document.createElement("div");
   meld.className = "ci-meld";
   for (const t of view.currentMeld.tiles) meld.appendChild(tileEl(t, "flat", false));
-  if (meld.lastChild) meld.lastChild.classList.add("top-tile");  // 最強牌のマーク
   c.appendChild(meld);
 }
 
@@ -150,10 +147,12 @@ export function renderGame(view, opts = {}) {
   renderTable(view, opts.showHistory !== false);
   renderCenter(view);
 
-  // 自分の名前と持ち点（手牌の左上に小さく）
+  // 自分のアイコン+名前+持ち点（左下・他席と同じスタイル）
   const me = view.players.find((p) => p.isYou);
-  $("my-info").innerHTML = me
-    ? `${me.name}　<b>${me.points}点</b>${me.finished ? " 👑" : ""}` : "";
+  const meHue = AVATAR_HUES[view.yourSeat % AVATAR_HUES.length];
+  $("my-info").innerHTML = me ? `
+    <div class="avatar" style="--hue:${meHue}"><span>${(me.name || "?").slice(0, 1)}</span></div>
+    <div class="id-badge">${me.name}${me.finished ? " 👑" : ""}<b>${me.points}点</b></div>` : "";
 
   const myTurn = view.yourTurn && !view.terminal;
   const sel = opts.selectableIds || null;   // チュートリアル: 許可牌のみ選択可能
@@ -246,6 +245,27 @@ export function showScreen(name) {
   }
 }
 
+// ---- ロビー: 対戦画面と同じ卓に着席する表示 ----
+export function renderLobbyTable(seats) {
+  const tb = $("lobby-seats");
+  tb.innerHTML = "";
+  const n = seats.length;
+  const pos = seatPositions(n);
+  for (const s of seats) {
+    const el = document.createElement("div");
+    el.className = `seat pos-${pos[s.seat]}` + (s.kind === "remote" ? " turn" : "");
+    const hue = AVATAR_HUES[s.seat % AVATAR_HUES.length];
+    const avatar = s.kind === "open"
+      ? `<div class="avatar open-seat"><span>＋</span></div>`
+      : s.kind === "ai"
+        ? `<div class="avatar" style="--hue:220;filter:grayscale(.4)"><span>🤖</span></div>`
+        : `<div class="avatar" style="--hue:${hue}"><span>${(s.name || "?").slice(0, 1)}</span></div>`;
+    el.innerHTML = `<div class="seat-info">${avatar}
+      <div class="id-badge">${s.kind === "open" ? "募集中" : s.name}</div></div>`;
+    tb.appendChild(el);
+  }
+}
+
 // ---- ルール/チュートリアル共通の牌グラフィック部品 ----
 const R_GLYPH = ["☁", "★", "☾", "☀"];
 const R_CLASS = ["cloud", "star", "moon", "sun"];
@@ -269,7 +289,7 @@ export const RULE_SNIPPETS = {
   one: `<div class="rule-row">${rt(9,1)}${LT}${rt(1,2)}${LT}${rt(2,0)}</div>`,
   two: `<div class="rule-row">${rt(2,0)}${ARROW}<span class="tut-zero">×2</span>
     　${meldHtml([[2,0],[2,1]])}${ARROW}<span class="tut-zero">×4</span></div>`,
-  five: `<div class="rule-row">${meldHtml([[5,1],[6,1],[7,0],[8,0]])}<span class="tile rtile moon top-tile"><span class="num">9</span><span class="gly">☾</span></span></div>`,
+  five: `<div class="rule-row">${meldHtml([[5,1],[6,1],[7,0],[8,0],[9,2]])}</div>`,
   settle: `<div class="rule-row tut-center"><span class="tut-zero">0枚</span> 👑
     <span class="rule-sep">vs</span> 残り1枚 ${ARROW}<span class="tut-ok">+1点</span></div>`,
 };
