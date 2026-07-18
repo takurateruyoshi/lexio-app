@@ -108,7 +108,7 @@ function renderTable(view, showHistory) {
     if (plays.length) {
       const latest = plays[plays.length - 1];
       if (view.currentMeld && view.lastPlayerSeat === p.index) mv.classList.add("live");
-      for (const t of latest.tiles) mv.appendChild(tileEl(t, "flat", false));
+      for (const t of latest.tiles) mv.appendChild(tileEl(t, "tiny", false));
     }
     if (p.passed && view.currentMeld) {
       const pc = document.createElement("div");

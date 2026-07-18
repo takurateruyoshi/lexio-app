@@ -449,7 +449,9 @@ export class GameController {
       if (!range) return "この人数ではジョーカーを使えません";
       const r = card.rank | 0;
       if (r < range[0] || r > range[1]) return `このジョーカーは ${range[0]}〜${range[1]} の代わりにできます`;
-      if (allTiles.some((t) => tileRank(t) === r)) return "一緒に出す牌と同じ数字は指定できません";
+      // 禁止は「同一の牌（同じ色・同じ数字）」との同時出しのみ。
+      // 同数字でも色が違えばペア/トリプル/フルハウス等に使える。
+      if (allTiles.includes(r * 4 + def.suit)) return "同じ牌（同じ色・数字）とは一緒に出せません";
       allTiles = [...allTiles, JOKER_BASE + r * 4 + def.suit];
     } else if (card.id === "lost_right") {
       const tgt = card.target | 0;

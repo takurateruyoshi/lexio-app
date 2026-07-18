@@ -2,7 +2,7 @@
 // 出典: LexioNeo 同梱スペシャルカード（各自3枚配布・1ラウンド1枚まで）。
 // 現在は効果が確定している9種13枚を実装（残り5種はカード文言の確認後に追加予定）。
 "use strict";
-import { shuffle, classify, beats, tileRank } from "./engine.js";
+import { shuffle, classify, beats } from "./engine.js";
 
 export const JOKER_BASE = 1000;   // 仮想牌ID = 1000 + rank*4 + suit
 export const isJokerTile = (t) => t >= JOKER_BASE;
@@ -14,13 +14,13 @@ export function jokerRange(numPlayers) {
 
 export const CARD_DEFS = {
   joker_cloud: { type: "joker", suit: 0, name: "ふわふわの雲", en: "Fluffy Cloud", icon: "☁", copies: 2,
-    desc: "雲のワイルド牌として牌と一緒に出せます（同時に出す牌と同じ数字は指定できません）" },
+    desc: "雲のワイルド牌として牌と一緒に出せます（同じ色・数字の牌とは一緒に出せません）" },
   joker_star: { type: "joker", suit: 1, name: "穏やかな星灯り", en: "Serene Starlight", icon: "★", copies: 2,
-    desc: "星のワイルド牌として牌と一緒に出せます（同時に出す牌と同じ数字は指定できません）" },
+    desc: "星のワイルド牌として牌と一緒に出せます（同じ色・数字の牌とは一緒に出せません）" },
   joker_moon: { type: "joker", suit: 2, name: "柔らかな月光", en: "Mellow Moonlight", icon: "☾", copies: 2,
-    desc: "月のワイルド牌として牌と一緒に出せます（同時に出す牌と同じ数字は指定できません）" },
+    desc: "月のワイルド牌として牌と一緒に出せます（同じ色・数字の牌とは一緒に出せません）" },
   joker_sun: { type: "joker", suit: 3, name: "輝く太陽", en: "Radiant Sun", icon: "☀", copies: 2,
-    desc: "太陽のワイルド牌として牌と一緒に出せます（同時に出す牌と同じ数字は指定できません）" },
+    desc: "太陽のワイルド牌として牌と一緒に出せます（同じ色・数字の牌とは一緒に出せません）" },
   new_beginning: { type: "game", name: "新しい始まり", en: "New Beginning", icon: "🔄", copies: 1,
     desc: "牌をシャッフルし直し、配り直すことができます。ラウンドが始まる前に配られた牌を確認したときのみ使用できます" },
   lost_right: { type: "flow", name: "失われた権利", en: "Lost Right", icon: "⛓", copies: 1,
@@ -35,15 +35,14 @@ export const CARD_DEFS = {
 
 // ジョーカーの代用数字の候補を自動列挙する。
 // tileIds: 一緒に出す牌 / currentTiles: 場の役の牌ID配列（リード時は null）。
-// 候補 = 範囲内 && 同時に出す牌と異なる数字 && 役として成立 && 場を上回る。
+// 候補 = 範囲内 && 同一の牌（同色同数字）と重複しない && 役として成立 && 場を上回る。
 export function jokerRankCandidates(tileIds, cardSuit, numPlayers, maxRank, currentTiles) {
   const range = jokerRange(numPlayers);
   if (!range) return [];
   const cur = currentTiles && currentTiles.length ? classify(currentTiles, maxRank) : null;
-  const used = new Set(tileIds.map((t) => tileRank(t)));
   const out = [];
   for (let r = range[0]; r <= range[1]; r++) {
-    if (used.has(r)) continue;
+    if (tileIds.includes(r * 4 + cardSuit)) continue;
     const cand = classify([...tileIds, JOKER_BASE + r * 4 + cardSuit], maxRank);
     if (cand && beats(cand, cur)) out.push(r);
   }

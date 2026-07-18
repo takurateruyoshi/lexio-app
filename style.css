@@ -315,7 +315,7 @@ button.choice.active{
 
 .seat-zone{display:flex;flex-direction:column;align-items:center;gap:6px}
 .pos-b .seat-zone{flex-direction:column-reverse}
-.seat-meld{display:flex;gap:6px;min-height:56px;align-items:center;justify-content:center}
+.seat-meld{display:flex;gap:2px;min-height:26px;align-items:center;justify-content:center}
 .seat-hand{display:flex;gap:1px;flex-wrap:wrap;justify-content:center;max-width:300px;
   padding:2px 4px;background:rgba(0,0,0,.35);border-radius:6px}
 .top-menu select{padding:4px 8px;font-size:12px;min-width:0;border-radius:8px}
@@ -552,6 +552,9 @@ button.hint-glow{
   transform-origin:50% 130%;
   transition:transform .22s cubic-bezier(.2,.8,.3,1), box-shadow .22s;
 }
+.my-cards.stack{right:10px;bottom:4px}
+.my-cards.stack .ncard{margin-left:-52px}
+.my-cards.stack .ncard:hover{margin-left:-52px}
 .ncard:nth-child(1){transform:rotate(-9deg)}
 .ncard:nth-child(2){transform:rotate(0deg) translateY(-4px)}
 .ncard:nth-child(3){transform:rotate(9deg)}
@@ -737,6 +740,7 @@ button.hint-glow{
   .action-msg{bottom:94px}
   .my-info{bottom:26px;left:8px}
   .my-cards{bottom:4px;right:64px}
+  .my-cards.stack .ncard{margin-left:-46px}
   .tut-hint{width:min(340px,84%);font-size:11px;padding:10px 12px;max-height:46%}
   .stepper-list{gap:8px}
   .step-value{min-width:140px;padding:8px 0;font-size:15px}
@@ -748,7 +752,7 @@ button.hint-glow{
   .ci-meld .tile.flat .num{font-size:17px}
   .center-info{padding:10px 12px}
   .my-hand{padding:8px 6px 6px}
-  .seat-meld{min-height:40px}
+  .seat-meld{min-height:20px}
   .pos-t{top:34px}
   .pos-tl{top:40px}.pos-tr{top:40px}
   .center-info{padding:6px 12px;top:42%}

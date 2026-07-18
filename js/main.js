@@ -641,12 +641,24 @@ function positionCardFan() {
   if (!wrap.childElementCount) { wrap.style.left = ""; wrap.style.right = ""; return; }
   if (tiles.length) {
     const r = tiles[tiles.length - 1].getBoundingClientRect();
-    const left = Math.min(r.right + 10, window.innerWidth - 180);
-    wrap.style.left = `${Math.round(left)}px`;
-    wrap.style.right = "auto";
+    const maxLeft = window.innerWidth - 180;
+    if (r.right + 10 > maxLeft) {
+      // 幅が足りない時は右下コーナーで重ねてコンパクト表示（手牌に被せない）
+      wrap.classList.add("stack");
+      wrap.style.left = "";
+      wrap.style.right = "";
+      wrap.style.bottom = "";
+    } else {
+      wrap.classList.remove("stack");
+      wrap.style.left = `${Math.round(r.right + 10)}px`;
+      wrap.style.right = "auto";
+      wrap.style.bottom = "";
+    }
   } else {
+    wrap.classList.remove("stack");
     wrap.style.left = "";
     wrap.style.right = "";
+    wrap.style.bottom = "";
   }
 }
 function CARD_DEFS_TYPE(c) { return c.type; }
