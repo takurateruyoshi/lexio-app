@@ -17,7 +17,8 @@ const SEEN_KEY = "lexio.seen.v1";
 let session = null;      // {mode:'solo'|'host'|'guest'|'spectate', ...}
 let lastView = null;
 let reconnecting = null;
-const setup = { size: 3, ai: 0 };   // 対戦設定の状態
+const setup = { size: 3, ai: 0, rule: "classic" };   // 対戦設定の状態
+let armedCard = null;   // Neo: 使用準備中のカード {id, rank?, target?, gift?}
 
 const storedName = () => { try { return localStorage.getItem(NAME_KEY) || "あなた"; } catch { return "あなた"; } };
 const saveName = (n) => { try { localStorage.setItem(NAME_KEY, n); } catch {} };
@@ -47,11 +48,20 @@ function renderBanner(view) {
     if (session && session.mode === "host") {
       html += ` <button id="force-end" class="ghost small">対戦を終了する</button>`;
     }
+  } else if (view && view.endOffer) {
+    html = `🃏 精算前に「<b>${view.endOffer.name}</b>」を使いますか？
+      <button id="endcard-yes" class="primary small">使う</button>
+      <button id="endcard-no" class="ghost small">見送る</button>`;
+  } else if (view && view.settling) {
+    html = "🃏 他のプレイヤーがスペシャルカードを検討中…";
   } else if (session && session.mode === "tutorial" && session.tut) {
     html = session.tut.instructionHtml();
   }
   b.innerHTML = html;
   b.classList.toggle("hidden", !html);
+  const ey = $("endcard-yes"), en = $("endcard-no");
+  if (ey) ey.addEventListener("click", () => endCardRespond(true));
+  if (en) en.addEventListener("click", () => endCardRespond(false));
   const vy = $("vote-yes"), vn = $("vote-no"), fe = $("force-end");
   if (vy) vy.addEventListener("click", () => voteEnd(true));
   if (vn) vn.addEventListener("click", () => voteEnd(false));
@@ -81,6 +91,7 @@ function onViewUpdate(view) {
   lastView = view;
   renderGame(view, { showHistory: showHistory() });
   renderBanner(view);
+  renderNeoUI(view);
   $("result-again").classList.toggle("hidden", session && session.mode === "guest");
   if (session && view.matchOver && !session._recSaved) {
     const ctrl = session.ctrl || (session.host && session.host.controller);
@@ -105,6 +116,7 @@ function leaveSession() {
   session = null;
   lastView = null;
   reconnecting = null;
+  armedCard = null;
   toggleSpectateControls(false);
   showScreen("title");
   $("title-hint").textContent = "";
@@ -151,6 +163,16 @@ function renderSetup() {
   }
   $("spectate-opts").classList.toggle("hidden", remaining !== 0);
   $("turn-limit-block").classList.toggle("hidden", remaining === 0);
+  // ルール選択（Neoは3人以上・対人/ソロのみ）
+  const neoOk = setup.size >= 3 && remaining !== 0;
+  if (!neoOk) setup.rule = "classic";
+  document.querySelectorAll("#rule-buttons .choice").forEach((b) => {
+    b.classList.toggle("active", b.dataset.rule === setup.rule);
+    if (b.dataset.rule === "neo") b.disabled = !neoOk;
+  });
+  $("rule-note").textContent = setup.rule === "neo"
+    ? "各自スペシャルカード3枚・1ラウンド1枚まで（AIはまだカードを使いません）"
+    : (neoOk ? "" : "Neoは3人以上の対人/ソロで選べます");
 }
 
 function setupGo() {
@@ -167,7 +189,7 @@ function startSolo() {
   const seats = [{ kind: "human", name: storedName() }];
   for (let i = 1; i < n; i++) seats.push({ kind: "ai", name: `AI-${i}` });
   const ctrl = new GameController(n, seats, numRounds(), () => onViewUpdate(ctrl.view(0)),
-    { turnLimitSec: turnLimit() });
+    { turnLimitSec: turnLimit(), neo: setup.rule === "neo" });
   session = { mode: "solo", ctrl };
   showScreen("game");
   onViewUpdate(ctrl.view(0));
@@ -262,7 +284,8 @@ function createRoom() {
   session = { mode: "host" };
   session.host = new HostSession(storedName(), setup.size, numRounds(), hostCallbacks(),
                                  null, { openSeats: setup.size - 1 - setup.ai,
-                                         turnLimit: turnLimit() });
+                                         turnLimit: turnLimit(),
+                                         neo: setup.rule === "neo" });
 }
 
 function resumeHost(resume) {
@@ -434,10 +457,28 @@ function actor() {
   if (session.mode === "solo") return {
     play: (t) => session.ctrl.play(0, t),
     pass: () => session.ctrl.pass(0),
+    playCard: (t, c) => session.ctrl.playWithCard(0, t, c),
+    newBeginning: () => session.ctrl.useNewBeginning(0),
+    endCard: (u) => session.ctrl.respondEnding(0, u),
   };
-  if (session.mode === "host") return { play: (t) => session.host.play(t), pass: () => session.host.pass() };
-  if (session.mode === "guest") return { play: (t) => session.guest.play(t), pass: () => session.guest.pass() };
+  if (session.mode === "host") return {
+    play: (t) => session.host.play(t), pass: () => session.host.pass(),
+    playCard: (t, c) => session.host.playCard(t, c),
+    newBeginning: () => session.host.newBeginning(),
+    endCard: (u) => session.host.endCard(u),
+  };
+  if (session.mode === "guest") return {
+    play: (t) => session.guest.play(t), pass: () => session.guest.pass(),
+    playCard: (t, c) => session.guest.playCard(t, c),
+    newBeginning: () => session.guest.newBeginning(),
+    endCard: (u) => session.guest.endCard(u),
+  };
   return null;
+}
+
+function endCardRespond(use) {
+  const a = actor();
+  if (a && a.endCard) setActionMessage(a.endCard(use));
 }
 
 function doPlay() {
@@ -448,11 +489,90 @@ function doPlay() {
   const a = actor();
   if (!a) return;
   const tiles = selectedTiles();
+  if (armedCard) {
+    const need = armedNeeds();
+    if (need) { setActionMessage(need); return; }
+    const err = a.playCard(tiles, armedCard);
+    setActionMessage(err);
+    if (!err) armedCard = null;
+    if (!err && session.mode === "solo") onViewUpdate(session.ctrl.view(0));
+    return;
+  }
   if (!tiles.length) return;
   const err = a.play(tiles);
   setActionMessage(err);
   if (!err && session.mode === "solo") onViewUpdate(session.ctrl.view(0));
 }
+
+// ---- Neo: スペシャルカードUI ----
+function armedNeeds() {
+  if (!armedCard) return null;
+  if (armedCard.id.startsWith("joker") && armedCard.rank == null) return "ジョーカーの数字を選んでください";
+  if (armedCard.id === "lost_right" && armedCard.target == null) return "対象プレイヤーを選んでください";
+  if (armedCard.id === "unwanted_gift") {
+    if (armedCard.target == null) return "渡す相手を選んでください";
+    if (armedCard.gift == null) return "渡す牌を選んでください";
+  }
+  return null;
+}
+
+function renderNeoUI(view) {
+  const wrap = $("my-cards");
+  const ctx = $("card-ctx");
+  if (!view || !view.neo || !view.myCards || (session && session.mode === "spectate")) {
+    wrap.innerHTML = ""; ctx.classList.add("hidden"); return;
+  }
+  wrap.innerHTML = "";
+  for (const c of view.myCards) {
+    const b = document.createElement("button");
+    b.className = "card-chip" + (armedCard && armedCard.id === c.id ? " armed" : "")
+      + (view.cardUsed ? " disabled" : "");
+    b.innerHTML = `${c.icon} ${c.name}`;
+    b.title = c.desc;
+    b.disabled = view.cardUsed || view.terminal;
+    b.addEventListener("click", () => {
+      if (c.id === "new_beginning") {
+        if (!view.canNewBeginning) { setActionMessage("配牌直後（最初の牌が出る前）のみ使えます"); return; }
+        const a = actor(); setActionMessage(a.newBeginning()); return;
+      }
+      if (CARD_DEFS_TYPE(c) === "ending") { setActionMessage("精算のタイミングで自動的に確認します"); return; }
+      armedCard = (armedCard && armedCard.id === c.id) ? null : { id: c.id };
+      renderNeoUI(view);
+    });
+    wrap.appendChild(b);
+  }
+  // コンテキスト（数字・対象・渡す牌の選択）
+  ctx.innerHTML = "";
+  if (!armedCard) { ctx.classList.add("hidden"); return; }
+  ctx.classList.remove("hidden");
+  const addBtn = (label, on, active) => {
+    const b = document.createElement("button");
+    b.className = "ghost small" + (active ? " active-choice" : "");
+    b.textContent = label;
+    b.addEventListener("click", () => { on(); renderNeoUI(view); });
+    ctx.appendChild(b);
+  };
+  if (armedCard.id.startsWith("joker")) {
+    const range = { 3: [3, 5], 4: [3, 6], 5: [3, 7] }[view.numPlayers];
+    ctx.append("代用する数字: ");
+    for (let r = range[0]; r <= range[1]; r++) {
+      addBtn(String(r), () => { armedCard.rank = r; }, armedCard.rank === r);
+    }
+  } else {
+    ctx.append(armedCard.id === "lost_right" ? "強制パスさせる相手: " : "渡す相手: ");
+    for (const p of view.players) {
+      if (p.isYou || p.finished) continue;
+      addBtn(p.name, () => { armedCard.target = p.index; }, armedCard.target === p.index);
+    }
+    if (armedCard.id === "unwanted_gift" && armedCard.target != null) {
+      ctx.append(" 渡す牌: ");
+      for (const t of view.yourHand) {
+        addBtn(`${t.rank}${t.glyph}`, () => { armedCard.gift = t.id; }, armedCard.gift === t.id);
+      }
+    }
+  }
+}
+function CARD_DEFS_TYPE(c) { return c.type; }
 
 function doPass() {
   if (session && session.mode === "tutorial") {
@@ -604,6 +724,9 @@ window.addEventListener("DOMContentLoaded", () => {
   // 対戦設定
   document.querySelectorAll("#size-buttons .choice").forEach((b) => {
     b.addEventListener("click", () => { setup.size = parseInt(b.dataset.size, 10); renderSetup(); });
+  });
+  document.querySelectorAll("#rule-buttons .choice").forEach((b) => {
+    b.addEventListener("click", () => { setup.rule = b.dataset.rule; renderSetup(); });
   });
   $("setup-go-btn").addEventListener("click", setupGo);
   $("setup-back-btn").addEventListener("click", () => showScreen("title"));

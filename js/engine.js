@@ -14,9 +14,11 @@ export function standardConfig(numPlayers, maxMeldSize = 5) {
 }
 
 // ---- 牌と強さ ----------------------------------------------------------
+// 通常牌: id = rank*4 + suit。Neoのジョーカー仮想牌: id = 1000 + rank*4 + suit
+// （rank/suit の算出で 1000 を剰余で落とすことで、役判定・強さ比較は透過的に動く）
 export const makeTile = (rank, suit) => rank * 4 + suit;
-export const tileRank = (t) => Math.floor(t / 4);
-export const tileSuit = (t) => t % 4;
+export const tileRank = (t) => Math.floor((t % 1000) / 4);
+export const tileSuit = (t) => (t % 1000) % 4;
 
 // 数字の強さ順位: 3<4<...<max<1<2
 export function rankStrength(rank, maxRank) {
@@ -346,6 +348,7 @@ export class GameState {
       s.passed[p] = true;
     } else {
       for (const t of move.tiles) {
+        if (t >= 1000) continue;   // ジョーカー仮想牌は手牌に存在しない
         const i = s.hands[p].indexOf(t);
         if (i < 0) throw new Error(`tile ${t} not in hand of P${p}`);
         s.hands[p].splice(i, 1);

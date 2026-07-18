@@ -59,6 +59,14 @@
       <div class="setup-label">ラウンド数（1〜99）</div>
       <input id="num-rounds" type="number" min="1" max="99" value="3">
     </div>
+    <div class="setup-block" id="rule-block">
+      <div class="setup-label">ルール</div>
+      <div id="rule-buttons" class="choice-row">
+        <button data-rule="classic" class="choice active">クラシック</button>
+        <button data-rule="neo" class="choice">Neo（スペシャルカード）</button>
+      </div>
+      <p id="rule-note" class="hint"></p>
+    </div>
     <div class="setup-block" id="turn-limit-block">
       <div class="setup-label">思考時間の制限（時間切れは自動でパス/最弱リード）</div>
       <select id="turn-limit">
@@ -138,6 +146,8 @@
         <button id="play-btn" class="primary" disabled>出す</button>
       </div>
       <span id="action-msg" class="action-msg"></span>
+      <div id="my-cards" class="my-cards"></div>
+      <div id="card-ctx" class="card-ctx hidden"></div>
       <div id="my-info" class="my-info"></div>
       <div id="my-hand" class="my-hand"></div>
 

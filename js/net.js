@@ -42,6 +42,7 @@ export class HostSession {
     this.cb = cb;
     this.openSeats = Math.max(0, Math.min(tableSize - 1, opts.openSeats ?? tableSize - 1));
     this.turnLimit = Math.max(0, opts.turnLimit | 0);
+    this.neo = !!opts.neo;
     this.conns = new Map();     // seat -> DataConnection
     this.seatNames = new Map(); // seat -> name
     this.seatTokens = new Map();// seat -> 復帰用トークン
@@ -56,6 +57,7 @@ export class HostSession {
       this.rounds = resume.rounds;
       this.openSeats = resume.openSeats ?? this.tableSize - 1;
       this.turnLimit = resume.turnLimit ?? 0;
+      this.neo = !!resume.neo;
       this.seatNames = new Map(resume.seatNames);
       this.seatTokens = new Map(resume.seatTokens);
       this.inGame = true;
@@ -135,9 +137,12 @@ export class HostSession {
       if (m.t === "hello") this._onHello(conn, m);
       else if (m.t === "action" && this.controller && conn._seat !== undefined) {
         const seat = conn._seat;
-        const err = m.kind === "pass"
-          ? this.controller.pass(seat)
-          : this.controller.play(seat, (m.tiles || []).map(Number));
+        let err;
+        if (m.kind === "pass") err = this.controller.pass(seat);
+        else if (m.kind === "playCard") err = this.controller.playWithCard(seat, m.tiles || [], m.card || {});
+        else if (m.kind === "newBeginning") err = this.controller.useNewBeginning(seat);
+        else if (m.kind === "endCard") err = this.controller.respondEnding(seat, !!m.use);
+        else err = this.controller.play(seat, (m.tiles || []).map(Number));
         if (err) conn.send({ t: "reject", reason: err });
       } else if (m.t === "endPropose" && conn._seat !== undefined) {
         this.proposeEnd(conn._seat);
@@ -233,7 +238,7 @@ export class HostSession {
     this.inGame = true;
     this.controller = new GameController(this.tableSize, seats, this.rounds,
                                          () => this._pushStates(),
-                                         { turnLimitSec: this.turnLimit });
+                                         { turnLimitSec: this.turnLimit, neo: this.neo });
     for (const [seat, conn] of this.conns) conn.send({ t: "start", yourSeat: seat });
     this._pushStates();
     this.controller.advance();
@@ -250,7 +255,7 @@ export class HostSession {
     const seats = this.controller.seats.map((s) => ({ ...s }));
     this.controller = new GameController(this.tableSize, seats, this.rounds,
                                          () => this._pushStates(),
-                                         { turnLimitSec: this.turnLimit });
+                                         { turnLimitSec: this.turnLimit, neo: this.neo });
     this.proposal = null;
     for (const [seat, conn] of this.conns) conn.send({ t: "start", yourSeat: seat });
     this._pushStates();
@@ -341,6 +346,7 @@ export class HostSession {
         rounds: this.rounds,
         openSeats: this.openSeats,
         turnLimit: this.turnLimit,
+        neo: this.neo,
         seatNames: [...this.seatNames],
         seatTokens: [...this.seatTokens],
         snapshot: this.controller.snapshot(),
@@ -351,6 +357,9 @@ export class HostSession {
   // ホスト自身の操作
   play(tiles) { return this.controller ? this.controller.play(0, tiles) : "未開始"; }
   pass() { return this.controller ? this.controller.pass(0) : "未開始"; }
+  playCard(tiles, card) { return this.controller ? this.controller.playWithCard(0, tiles, card) : "未開始"; }
+  newBeginning() { return this.controller ? this.controller.useNewBeginning(0) : "未開始"; }
+  endCard(use) { return this.controller ? this.controller.respondEnding(0, use) : "未開始"; }
   hostProposeEnd() { this.proposeEnd(0); }
   hostVote(agree) { this.vote(0, agree); }
 
@@ -508,6 +517,9 @@ export class GuestSession {
 
   play(tiles) { try { this.conn.send({ t: "action", kind: "play", tiles }); } catch {} return null; }
   pass() { try { this.conn.send({ t: "action", kind: "pass" }); } catch {} return null; }
+  playCard(tiles, card) { try { this.conn.send({ t: "action", kind: "playCard", tiles, card }); } catch {} return null; }
+  newBeginning() { try { this.conn.send({ t: "action", kind: "newBeginning" }); } catch {} return null; }
+  endCard(use) { try { this.conn.send({ t: "action", kind: "endCard", use }); } catch {} return null; }
   proposeEnd() { try { this.conn.send({ t: "endPropose" }); } catch {} }
   voteEnd(agree) { try { this.conn.send({ t: "endVote", agree }); } catch {} }
 

@@ -7,6 +7,7 @@ import {
 } from "./engine.js";
 import { BeliefState, chooseMove } from "./ai.js";
 import { getTheta } from "./model.js";
+import { CARD_DEFS, buildDeck, jokerRange, JOKER_BASE } from "./cards.js";
 
 export function tileJson(t, maxRank) {
   const s = tileSuit(t);
@@ -14,6 +15,7 @@ export function tileJson(t, maxRank) {
     id: t, rank: tileRank(t), suit: s,
     suit_class: SUIT_CLASS[s], suit_label: SUIT_LABEL[s], glyph: SUIT_GLYPH[s],
     strength: tileStrength(t, maxRank),
+    joker: t >= 1000,
   };
 }
 
@@ -76,6 +78,16 @@ export class GameController {
     this.aiOpts = { ...aiOpts };
     this.turnLimitSec = Math.max(0, aiOpts.turnLimitSec | 0);  // 0=無制限
     this._turnDeadline = null;
+    // Neoモード（スペシャルカード）: 2人戦は対象外
+    this.neo = !!aiOpts.neo && numPlayers >= 3;
+    this.cards = [];                 // seat -> カードID配列
+    this.cardUsedRound = [];         // seat -> このラウンドで使用済みか
+    this.forcePass = [];             // seat -> 次の手番を強制パス（失われた権利）
+    this.endingQueue = null;         // 精算フェーズの問い合わせ順
+    if (this.neo) {
+      const deck = buildDeck();
+      for (let p = 0; p < numPlayers; p++) this.cards.push(deck.splice(0, 3));
+    }
     this.records = [];             // ラウンドごとの牌譜
     this.totalRounds = Math.max(1, Math.min(99, totalRounds | 0));
     this.round = 1;
@@ -103,7 +115,10 @@ export class GameController {
       trick: this.trick.map((e) => ({ player: e.player, tiles: [...e.tiles] })),
       scores: this.scores ? [...this.scores] : null,
       matchEnded: this.matchEnded,
-      aiOpts: { ...this.aiOpts, turnLimitSec: this.turnLimitSec },
+      aiOpts: { ...this.aiOpts, turnLimitSec: this.turnLimitSec, neo: this.neo },
+      cards: this.neo ? this.cards.map((c) => [...c]) : null,
+      cardUsedRound: this.neo ? [...this.cardUsedRound] : null,
+      forcePassArr: this.neo ? [...this.forcePass] : null,
       beliefs: Object.fromEntries(
         [...this.beliefs].map(([s, b]) => [s, b.toJSON()])),
     };
@@ -124,6 +139,13 @@ export class GameController {
     c.aiOpts = { ...(snap.aiOpts || {}) };
     c.turnLimitSec = Math.max(0, (c.aiOpts.turnLimitSec || 0) | 0);
     c._turnDeadline = null;
+    c.neo = !!c.aiOpts.neo;
+    c.cards = snap.cards ? snap.cards.map((x) => [...x]) : [];
+    c.cardUsedRound = snap.cardUsedRound ? [...snap.cardUsedRound]
+      : new Array(c.cfg.numPlayers).fill(false);
+    c.forcePass = snap.forcePassArr ? [...snap.forcePassArr]
+      : new Array(c.cfg.numPlayers).fill(false);
+    c.endingQueue = null;
     c.records = [];
     c._rec = { round: snap.round, seats: [], deal: [], moves: [], scores: null }; // 復元後の途中記録は簡略
     c.ai = new AiRunner();
@@ -183,6 +205,9 @@ export class GameController {
     this.log = [];
     this.trick = [];               // 現在のトリック [{player, tiles}]
     this.scores = null;
+    this.cardUsedRound = new Array(this.cfg.numPlayers).fill(false);
+    this.forcePass = new Array(this.cfg.numPlayers).fill(false);
+    this.endingQueue = null;
     // 牌譜（このラウンド）
     this._rec = {
       round: this.round,
@@ -286,16 +311,212 @@ export class GameController {
     if (meld !== null && !this.state.hands[seat].length) {
       this._note(`🏁 ${name} が上がりました！`, "finish");
     }
-    if (this.state.isTerminal() && this.scores === null) {
-      this.scores = roundScores(this.state);
-      for (let i = 0; i < this.cfg.numPlayers; i++) this.totals[i] += this.scores[i];
-      this._note(`ラウンド ${this.round}/${this.totalRounds} 終了。スコアを精算します。`, "info");
-      this._rec.scores = [...this.scores];
-      this._rec.finished = [...this.state.finished];
-      this._rec.totalsAfter = [...this.totals];
-      this.records.push(this._rec);
+    if (this.state.isTerminal() && this.scores === null && this.endingQueue === null) {
+      this._onRoundEnd();
     }
     this._armTurnTimer();
+  }
+
+  // ---- ラウンド終了（Neoでは精算前にENDINGカードの使用機会がある） ----
+  _onRoundEnd() {
+    const base = roundScores(this.state);
+    const n = this.cfg.numPlayers;
+    const queue = [];
+    if (this.neo) {
+      const order = [...Array(n).keys()].sort((a, b) => base[b] - base[a]); // 1位から
+      const winner = this.state.finished[0];
+      const last = order[order.length - 1];
+      for (const s of order) {
+        if (this.seats[s].kind === "ai" || this.cardUsedRound[s]) continue;  // AIはv1では使わない
+        for (const cid of this.cards[s]) {
+          const def = CARD_DEFS[cid];
+          if (!def || def.type !== "ending") continue;
+          if (cid === "winner_takes" && s !== winner) continue;
+          if (cid === "helping_hand" && s !== last) continue;
+          queue.push({ seat: s, cardId: cid });
+        }
+      }
+    }
+    if (!queue.length) { this._finalizeScores([]); return; }
+    this.endingQueue = { list: queue, idx: 0, mods: [] };
+    this._note("精算前 — スペシャルカードの使用機会があります", "info");
+    clearTimeout(this._endTimer);
+    this._endTimer = setTimeout(() => this._skipEndingAll(), 20000);
+  }
+
+  _skipEndingAll() {
+    if (this.endingQueue) this._finalizeScores(this.endingQueue.mods);
+  }
+
+  // 精算にENDINGカードの効果を適用したスコアを計算
+  _settlement(mods) {
+    const n = this.cfg.numPlayers;
+    const remain = this.state.hands.map((h) => h.length);
+    const mult = this.state.hands.map((h) =>
+      Math.pow(2, h.filter((t) => tileRank(t) === 2).length));
+    const pay = Array.from({ length: n }, () => new Array(n).fill(0)); // pay[i][j] = i→j
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        if (i !== j && remain[i] > remain[j]) pay[i][j] = (remain[i] - remain[j]) * mult[i];
+      }
+    }
+    const helping = mods.find((m) => m.cardId === "helping_hand");
+    if (helping) {
+      for (let j = 0; j < n; j++) if (pay[helping.seat][j] > 0) pay[helping.seat][j] = 1;
+    }
+    const wt = mods.find((m) => m.cardId === "winner_takes");
+    if (wt) {
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          if (i !== wt.seat && j !== wt.seat && pay[i][j] > 0) {
+            pay[i][wt.seat] += pay[i][j];   // 敗者間の支払いを勝者が回収
+            pay[i][j] = 0;
+          }
+        }
+      }
+    }
+    const score = new Array(n).fill(0);
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) { score[i] -= pay[i][j]; score[j] += pay[i][j]; }
+    }
+    return score;
+  }
+
+  _finalizeScores(mods) {
+    clearTimeout(this._endTimer);
+    this.endingQueue = null;
+    this.scores = this.neo ? this._settlement(mods) : roundScores(this.state);
+    for (let i = 0; i < this.cfg.numPlayers; i++) this.totals[i] += this.scores[i];
+    this._note(`ラウンド ${this.round}/${this.totalRounds} 終了。スコアを精算します。`, "info");
+    this._rec.scores = [...this.scores];
+    this._rec.finished = [...this.state.finished];
+    this._rec.totalsAfter = [...this.totals];
+    this._rec.cardMods = mods.map((m) => ({ ...m }));
+    this.records.push(this._rec);
+    this.onUpdate();
+  }
+
+  // 精算フェーズの応答（use=trueでカード使用）
+  respondEnding(seat, use) {
+    const q = this.endingQueue;
+    if (!q) return "精算フェーズではありません";
+    const cur = q.list[q.idx];
+    if (!cur || cur.seat !== seat) return "あなたの選択の番ではありません";
+    if (use) {
+      this._takeCard(seat, cur.cardId);
+      q.mods.push({ seat, cardId: cur.cardId });
+      this._note(`${this.names()[seat]} が「${CARD_DEFS[cur.cardId].name}」を使用！`, "play");
+      // 同一プレイヤーの残りの問い合わせを除去（1ラウンド1枚）
+      q.list = q.list.filter((e, i) => i <= q.idx || e.seat !== seat);
+    }
+    q.idx++;
+    while (q.idx < q.list.length &&
+           this.cardUsedRound[q.list[q.idx].seat] && !use) q.idx++;
+    if (q.idx >= q.list.length) this._finalizeScores(q.mods);
+    else this.onUpdate();
+    return null;
+  }
+
+  // ---- Neo: カード共通処理 ----
+  _takeCard(seat, cardId) {
+    const i = this.cards[seat].indexOf(cardId);
+    if (i >= 0) this.cards[seat].splice(i, 1);
+    this.cardUsedRound[seat] = true;
+  }
+
+  _cardCheck(seat, cardId) {
+    if (!this.neo) return "Neoモードではありません";
+    if (this.paused || this.matchEnded) return "今は使えません";
+    if (!this.cards[seat] || !this.cards[seat].includes(cardId)) return "そのカードを持っていません";
+    if (this.cardUsedRound[seat]) return "スペシャルカードは1ラウンドに1枚までです";
+    return null;
+  }
+
+  // 牌と一緒に使うカード（ジョーカー / 失われた権利 / 不要なギフト）
+  // card: {id, rank?, target?, gift?}
+  playWithCard(seat, tileIds, card) {
+    const err0 = this._cardCheck(seat, card.id);
+    if (err0) return err0;
+    if (this.state.isTerminal()) return "ゲームは終了しています";
+    if (this.state.turn !== seat) return "あなたの手番ではありません";
+    const def = CARD_DEFS[card.id];
+    const hand = this.state.hands[seat];
+    let allTiles = tileIds.map(Number);
+    if (!allTiles.every((t) => hand.includes(t))) return "手札にないタイルが含まれています";
+
+    if (def.type === "joker") {
+      const range = jokerRange(this.cfg.numPlayers);
+      if (!range) return "この人数ではジョーカーを使えません";
+      const r = card.rank | 0;
+      if (r < range[0] || r > range[1]) return `このジョーカーは ${range[0]}〜${range[1]} の代わりにできます`;
+      if (allTiles.some((t) => tileRank(t) === r)) return "一緒に出す牌と同じ数字は指定できません";
+      allTiles = [...allTiles, JOKER_BASE + r * 4 + def.suit];
+    } else if (card.id === "lost_right") {
+      const tgt = card.target | 0;
+      if (tgt === seat || tgt < 0 || tgt >= this.cfg.numPlayers ||
+          !this.state.hands[tgt].length) return "対象プレイヤーが不正です";
+    } else if (card.id === "unwanted_gift") {
+      const tgt = card.target | 0;
+      if (tgt === seat || tgt < 0 || tgt >= this.cfg.numPlayers ||
+          !this.state.hands[tgt].length) return "対象プレイヤーが不正です";
+      const gift = card.gift | 0;
+      if (!hand.includes(gift) || allTiles.includes(gift)) return "渡す牌が不正です";
+    } else {
+      return "このカードは牌と一緒には使えません";
+    }
+
+    const meld = classify(allTiles, this.cfg.maxRank);
+    if (meld === null) return "正当な役ではありません";
+    if (!beats(meld, this.state.current)) return "場に出せません（より強い同枚数の役が必要）";
+
+    this._takeCard(seat, card.id);
+    this._note(`${this.names()[seat]} が「${def.name}」を使用！`, "play");
+    this._applyMove(seat, meld);
+
+    // 追加効果
+    if (card.id === "lost_right") {
+      this.forcePass[card.target | 0] = true;
+      this._note(`${this.names()[card.target | 0]} は次の手番を強制パスされる`, "pass");
+    } else if (card.id === "unwanted_gift" && !this.state.isTerminal()) {
+      const tgt = card.target | 0, gift = card.gift | 0;
+      const hi = this.state.hands[seat].indexOf(gift);
+      if (hi >= 0) {
+        this.state.hands[seat].splice(hi, 1);
+        this.state.hands[tgt].push(gift);
+        this.state.hands[tgt].sort((a, b) => a - b);
+        this._note(`${this.names()[seat]} が牌1枚を ${this.names()[tgt]} に押し付けた！`, "pass");
+        if (!this.state.hands[seat].length && !this.state.finished.includes(seat)) {
+          this.state.finished.push(seat);   // 渡して0枚なら上がり
+        }
+      }
+    }
+    if (this.state.isTerminal() && this.scores === null && this.endingQueue === null) {
+      this._onRoundEnd();
+    }
+    this.advance();
+    return null;
+  }
+
+  // 新しい始まり: 配牌直後のみ・全員の牌を配り直す
+  useNewBeginning(seat) {
+    const err0 = this._cardCheck(seat, "new_beginning");
+    if (err0) return err0;
+    if (this._rec.moves.length > 0) return "最初の牌が出た後は使えません";
+    this._takeCard(seat, "new_beginning");
+    this.state = GameState.deal(this.cfg);
+    this.trick = [];
+    this._rec.deal = this.state.hands.map((h) => [...h]);
+    this.beliefs = new Map();
+    for (let p = 0; p < this.cfg.numPlayers; p++) {
+      if (this.seats[p].kind === "ai") {
+        this.beliefs.set(p, new BeliefState(this.cfg, p, this.state.hands[p]));
+      }
+    }
+    this._note(`${this.names()[seat]} が「新しい始まり」を使用 — 全員の牌を配り直し！`, "play");
+    this._armTurnTimer();
+    this.onUpdate();
+    this.advance();
+    return null;
   }
 
   // 人間/リモートの手番まで AI を進める（非同期）
@@ -306,6 +527,16 @@ export class GameController {
     let guard = 0;
     while (!this.state.isTerminal() && !this.paused && !this.matchEnded && guard++ < 300) {
       const p = this.state.turn;
+      // 失われた権利: 次の手番を強制パス（リード時は効果消滅）
+      if (this.forcePass[p]) {
+        this.forcePass[p] = false;
+        if (this.state.current !== null) {
+          this._note(`${this.names()[p]} は強制パス（失われた権利）`, "pass");
+          this._applyMove(p, null);
+          this.onUpdate();
+          continue;
+        }
+      }
       if (this.seats[p].kind !== "ai") break;
       const belief = this.beliefs.get(p);
       belief.syncMyHand(this.state.hands[p]);
@@ -412,6 +643,18 @@ export class GameController {
       pausedReason: this.pausedReason,
       turnLimit: this.turnLimitSec,
       turnDeadline: this._turnDeadline,
+      neo: this.neo,
+      myCards: this.neo ? this.cards[seat].map((id) => ({ id, ...CARD_DEFS[id] })) : null,
+      cardUsed: this.neo ? this.cardUsedRound[seat] : false,
+      cardCounts: this.neo ? this.cards.map((c) => c.length) : null,
+      canNewBeginning: this.neo && this._rec.moves.length === 0 &&
+        !this.cardUsedRound[seat] && this.cards[seat].includes("new_beginning"),
+      endOffer: (this.endingQueue && this.endingQueue.list[this.endingQueue.idx] &&
+                 this.endingQueue.list[this.endingQueue.idx].seat === seat)
+        ? { cardId: this.endingQueue.list[this.endingQueue.idx].cardId,
+            name: CARD_DEFS[this.endingQueue.list[this.endingQueue.idx].cardId].name }
+        : null,
+      settling: this.endingQueue !== null,
       prevResult: (() => {   // 一局前の結果（対局中の振り返り用）
         const done = this.records.filter((r) => r.scores !== null);
         const prev = st.isTerminal() ? done[done.length - 2] : done[done.length - 1];

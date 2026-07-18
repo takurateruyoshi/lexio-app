@@ -49,7 +49,7 @@ export class BeliefState {
   }
 
   observePlay(player, meldTiles) {
-    for (const t of meldTiles) this.playedTiles.add(t);
+    for (const t of meldTiles) { if (t < 1000) this.playedTiles.add(t); }  // ジョーカーは実牌でない
     if (player !== this.me) {
       for (const ev of this.passEvents) {
         if (ev.player === player) ev.laterPlays.push(...meldTiles);

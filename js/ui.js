@@ -11,7 +11,7 @@ export function selectedTiles() { return [...SELECTED]; }
 // cls: "flat"=卓上の表示, "mini"=履歴用小型, "tiny"=アバター下の極小履歴
 export function tileEl(t, cls, clickable, onToggle) {
   const d = document.createElement("div");
-  d.className = "tile " + t.suit_class + (cls ? " " + cls : "");
+  d.className = "tile " + t.suit_class + (cls ? " " + cls : "") + (t.joker ? " joker" : "");
   d.innerHTML = `<span class="num">${t.rank}</span><span class="gly">${t.glyph}</span>`;
   d.dataset.id = t.id;
   if (clickable) {
@@ -85,7 +85,7 @@ function renderTable(view, showHistory) {
         </div>
         <div class="seat-name">${p.name}${p.finished ? " 👑" : ""}
           <span class="kind-dot ${p.kind === "ai" ? "ai" : "human"}"></span></div>
-        <div class="seat-points">${p.points}点</div>`;
+        <div class="seat-points">${p.points}点${view.cardCounts ? `　🃏${view.cardCounts[p.index]}` : ""}</div>`;
       if (histEl) info.appendChild(histEl);
       seat.appendChild(info);
     }
