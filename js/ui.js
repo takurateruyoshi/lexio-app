@@ -110,6 +110,7 @@ function renderTable(view, showHistory) {
       const latest = plays[plays.length - 1];
       if (view.currentMeld && view.lastPlayerSeat === p.index) mv.classList.add("live");
       for (const t of latest.tiles) mv.appendChild(tileEl(t, "flat", false));
+      if (mv.lastChild) mv.lastChild.classList.add("top-tile");  // 役の強さを決める最強牌
     }
     if (p.passed && view.currentMeld) {
       const pc = document.createElement("div");
@@ -132,6 +133,7 @@ function renderCenter(view) {
   const meld = document.createElement("div");
   meld.className = "ci-meld";
   for (const t of view.currentMeld.tiles) meld.appendChild(tileEl(t, "flat", false));
+  if (meld.lastChild) meld.lastChild.classList.add("top-tile");  // 最強牌のマーク
   c.appendChild(meld);
 }
 
@@ -264,12 +266,10 @@ export const RULE_SNIPPETS = {
   pair: `<div class="rule-row"><span class="rule-label">ペア</span>${meldHtml([[8,1],[8,3]])}</div>`,
   pass: `<div class="rule-row tut-center"><span class="tut-btn">パス</span>${ARROW}
     ${rt(9,2)}${ARROW}<span class="tut-ok">また出せる</span></div>`,
-  one: `<div class="rule-row">${OK}${meldHtml([[6,0],[7,1],[8,2],[9,3],[1,0]])}
-    <span class="rule-note">1 は 9 より強い</span></div>`,
-  two: `<div class="rule-row">${rt(2,0)}${ARROW}<span class="tut-zero">最強</span>
-    <span class="rule-note">ただし残すと支払い ×2</span></div>`,
-  five: `<div class="rule-row"><span class="rule-label">ストレート</span>
-    ${meldHtml([[5,2],[6,2],[7,0],[8,0],[9,2]])}</div>`,
+  one: `<div class="rule-row">${rt(9,1)}${LT}${rt(1,2)}${LT}${rt(2,0)}</div>`,
+  two: `<div class="rule-row">${rt(2,0)}${ARROW}<span class="tut-zero">×2</span>
+    　${meldHtml([[2,0],[2,1]])}${ARROW}<span class="tut-zero">×4</span></div>`,
+  five: `<div class="rule-row">${meldHtml([[5,1],[6,1],[7,0],[8,0]])}<span class="tile rtile moon top-tile"><span class="num">9</span><span class="gly">☾</span></span></div>`,
   settle: `<div class="rule-row tut-center"><span class="tut-zero">0枚</span> 👑
     <span class="rule-sep">vs</span> 残り1枚 ${ARROW}<span class="tut-ok">+1点</span></div>`,
 };

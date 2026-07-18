@@ -7,47 +7,48 @@ import { makeTile as T, tileRank, tileSuit } from "./engine.js";
 
 // ---- 固定シナリオ（2人戦・9ランク・12枚・あなたが勝つ） ----
 const MY_HAND = [
-  T(3,0), T(3,3),                         // ☁3 ☀3
-  T(5,0), T(5,1),                         // 5ペア
-  T(1,2),                                 // ☾1
+  T(3,0),                                 // ☁3（最弱リード）
+  T(6,0),                                 // ☁6（大きい数字で上回る）
+  T(5,0), T(5,3),                         // ☁5 ☀5（スートの強弱）
   T(4,0), T(4,1),                         // 4ペア
-  T(5,2), T(6,2), T(7,0), T(8,0), T(9,2), // ストレート 5-6-7-8-9（最後に出し切る）
+  T(1,2),                                 // ☾1（1の強さ）
+  T(5,1), T(6,1), T(7,0), T(8,0), T(9,0), // ストレート 5-6-7-8-9（出し切って勝つ）
 ];
 const OPP_HAND = [
-  T(3,2),                                 // ☾3
-  T(9,1), T(9,3),                         // 9ペア
+  T(4,2),                                 // ☾4
+  T(5,2),                                 // ☾5
+  T(9,1), T(9,2),                         // 9ペア
   T(7,1),                                 // ★7
-  T(2,0), T(2,1),                         // 2ペア
-  T(3,1), T(4,2), T(5,3), T(6,0), T(7,3), // ストレート 3-4-5-6-7
-  T(8,3),                                 // ☀8（出さずに残る → あなたの勝ち）
+  T(2,0), T(2,1),                         // 2ペア（出さずに残る → 支払い×4の実演）
+  T(3,3), T(6,3), T(8,3), T(8,2), T(9,3), // 残り（出さない）
 ];
 
 // who:0=あなた / 1=先生
 const STEPS = [
   { who: 0, type: "play", tiles: [T(3,0)],
     text: "最弱の牌からスタート", snippet: RULE_SNIPPETS.strength },
-  { who: 1, type: "play", tiles: [T(3,2)] },
-  { who: 0, type: "play", tiles: [T(3,3)],
-    text: "同じ3でもスートで勝てる", snippet: RULE_SNIPPETS.suits },
+  { who: 1, type: "play", tiles: [T(4,2)] },
+  { who: 0, type: "play", tiles: [T(6,0)],
+    text: "大きい数字で上回ろう", snippet: RULE_SNIPPETS.strength },
   { who: 1, type: "pass" },
-  { who: 0, type: "play", tiles: [T(5,0), T(5,1)],
+  { who: 0, type: "play", tiles: [T(5,0)],
+    text: "場が流れたら自由にリード" },
+  { who: 1, type: "play", tiles: [T(5,2)] },
+  { who: 0, type: "play", tiles: [T(5,3)],
+    text: "同じ5でもスートで勝てる", snippet: RULE_SNIPPETS.suits },
+  { who: 1, type: "pass" },
+  { who: 0, type: "play", tiles: [T(4,0), T(4,1)],
     text: "2枚選んでペアを出そう", snippet: RULE_SNIPPETS.pair },
-  { who: 1, type: "play", tiles: [T(9,1), T(9,3)] },
+  { who: 1, type: "play", tiles: [T(9,1), T(9,2)] },
   { who: 0, type: "pass",
     text: "勝てない時はパス。抜けじゃない", snippet: RULE_SNIPPETS.pass },
   { who: 1, type: "play", tiles: [T(7,1)] },
   { who: 0, type: "play", tiles: [T(1,2)],
-    text: "1 は数字より強い", snippet: RULE_SNIPPETS.one },
+    text: "1 は 9 より強い（2 はさらに上）", snippet: RULE_SNIPPETS.one },
   { who: 1, type: "pass" },
-  { who: 0, type: "play", tiles: [T(4,0), T(4,1)],
-    text: "場が流れたら自由にリード", snippet: RULE_SNIPPETS.pair },
-  { who: 1, type: "play", tiles: [T(2,0), T(2,1)] },
-  { who: 0, type: "pass",
-    text: "2 は最強。無理せずパス", snippet: RULE_SNIPPETS.two },
-  { who: 1, type: "play", tiles: [T(3,1), T(4,2), T(5,3), T(6,0), T(7,3)] },
-  { who: 0, type: "play", tiles: [T(5,2), T(6,2), T(7,0), T(8,0), T(9,2)],
-    text: "5枚役には5枚役！ 上のストレートで勝負", snippet: RULE_SNIPPETS.five },
-  // ↑ これで手札0枚 = あなたの勝ち！
+  { who: 0, type: "play", tiles: [T(5,1), T(6,1), T(7,0), T(8,0), T(9,0)],
+    text: "5枚役で出し切り！ 役の強さは一番強い数字で決まる", snippet: RULE_SNIPPETS.five },
+  // ↑ 手札0枚 = あなたの勝ち。先生は 2 を2枚残したので支払い×4！
 ];
 
 const eqSet = (a, b) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
@@ -81,7 +82,8 @@ export class Tutorial {
 
   instructionHtml() {
     if (this.done()) {
-      return `🏆 <b>あなたの勝ち！</b> 先生の残り1枚ぶんチップを獲得 — 本番へどうぞ ${RULE_SNIPPETS.settle}`;
+      return `🏆 <b>あなたの勝ち！</b> 先生は <b>2</b> を2枚残したので支払い<b>×4</b>
+        <div class="tut-snippet">${RULE_SNIPPETS.two}</div>`;
     }
     const s = this.step();
     if (!s) return "";
