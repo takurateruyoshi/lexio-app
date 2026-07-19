@@ -74,6 +74,11 @@ function renderBanner(view) {
   } else if (view && view.paused) {
     html = `⏸ ${view.pausedReason || "一時停止中"}`;
     if (session && session.mode === "host") {
+      // 戻って来られない人の席は、再招待リンク（同じ席・同じ手牌）で誰でも埋められる
+      for (const ms of session.host.missingSeats()) {
+        html += ` <button class="ghost small reinvite-btn" data-seat="${ms.seat}"
+          data-token="${ms.token}">「${ms.name}」の再招待リンクをコピー</button>`;
+      }
       html += ` <button id="force-end" class="ghost small">対戦を終了する</button>`;
     }
   } else if (view && view.endOffer) {
@@ -109,6 +114,12 @@ function renderBanner(view) {
   const ey = $("endcard-yes"), en = $("endcard-no");
   if (ey) ey.addEventListener("click", () => endCardRespond(true));
   if (en) en.addEventListener("click", () => endCardRespond(false));
+  b.querySelectorAll(".reinvite-btn").forEach((btn) => btn.addEventListener("click", () => {
+    const link = `${location.origin}${location.pathname}` +
+      `?room=${session.host.code}&seat=${btn.dataset.seat}&key=${btn.dataset.token}`;
+    navigator.clipboard && navigator.clipboard.writeText(link);
+    btn.textContent = "コピーしました — 誰かに送ってください";
+  }));
   const vy = $("vote-yes"), vn = $("vote-no"), fe = $("force-end");
   if (vy) vy.addEventListener("click", () => voteEnd(true));
   if (vn) vn.addEventListener("click", () => voteEnd(false));
@@ -313,6 +324,15 @@ function hostCallbacks() {
       if ($("screen-game").classList.contains("hidden")) showScreen("game");
       onViewUpdate(view);
     },
+    onDemoted: ({ code, seat, token }) => {
+      // 誰かがホストを引き継ぎ済み — ゲストとして同じ席に戻る
+      try { session.host.peer && session.host.peer.destroy(); } catch {}
+      const name = storedName();
+      session = { mode: "guest", guestName: name };
+      reconnecting = 1;
+      renderBanner(lastView);
+      session.guest = new GuestSession(name, code, guestCallbacks(), { seat, token });
+    },
     onError: (msg) => {
       // 部屋作成に失敗（オフライン等）→ ソロのフォールバックを提示
       if (session && session.mode === "host" && !session.host.inGame) {
@@ -405,13 +425,21 @@ function guestCallbacks() {
       alert("ホストとの接続が切れました");
       leaveSession();
     },
+    onTakeover: (data) => {
+      // ホストが戻らない — バックアップから自分がホストを引き継ぐ
+      try { session.guest.destroy(); } catch {}
+      session = { mode: "host" };
+      reconnecting = null;
+      session.host = new HostSession(null, 0, 0, hostCallbacks(), data);
+      setActionMessage("ホストが戻らないため、あなたがホストを引き継ぎました");
+    },
   };
 }
 
-function showJoinOverlay(code) {
+function showJoinOverlay(code, rejoin = null) {
   $("join-code-label").textContent = code.toUpperCase();
   $("join-name").value = storedName();
-  $("join-hint").textContent = "";
+  $("join-hint").textContent = rejoin ? "空いた席への再招待です — 途中から参加します" : "";
   $("join-overlay").classList.remove("hidden");
   $("join-go-btn").onclick = () => {
     goFullscreen();
@@ -419,7 +447,7 @@ function showJoinOverlay(code) {
     saveName(name);
     $("join-hint").textContent = "部屋に接続中...";
     session = { mode: "guest", guestName: name };
-    session.guest = new GuestSession(name, code.toUpperCase(), guestCallbacks());
+    session.guest = new GuestSession(name, code.toUpperCase(), guestCallbacks(), rejoin);
   };
 }
 
@@ -688,13 +716,14 @@ function positionCardFan() {
   const tiles = document.querySelectorAll("#my-hand .tile");
   const stage = $("game-stage");
   if (PORTRAIT_MQ.matches) {
-    // 手牌は常に1行: 枚数に応じて牌幅を縮小（最大40px・最小20px）
+    // 手牌は常に1行・牌は固定40px: 収まらない分は重ねて表示（サイズは変えない）
     const hand = $("my-hand");
     const n = hand.querySelectorAll(".tile").length;
     if (n) {
       const avail = window.innerWidth - 12;
-      const w = Math.max(20, Math.min(40, Math.floor((avail - (n - 1) * 2) / n)));
-      hand.style.setProperty("--hand-w", `${w}px`);
+      const TILE = 40;
+      const stride = n > 1 ? Math.min(TILE + 2, (avail - TILE) / (n - 1)) : TILE;
+      hand.style.setProperty("--hand-ml", `${Math.floor(stride - TILE)}px`);
     }
     // 実測高さで卓とボタンの位置を追従させる
     // （画面非表示中は0になるので既定値のまま次の描画で追従）
@@ -785,7 +814,10 @@ function tryAutoResume() {
   const room = params.get("room");
   if (room && /^[A-Za-z0-9]{4,6}$/.test(room)) {
     history.replaceState({}, "", location.pathname);
-    showJoinOverlay(room);
+    // 再招待リンク（席とトークン付き）: 対局中のその席に直接入る
+    const seat = parseInt(params.get("seat") || "", 10);
+    const key = params.get("key");
+    showJoinOverlay(room, Number.isInteger(seat) && key ? { seat, token: key } : null);
     return;
   }
   const hostSave = HostSession.loadResume();

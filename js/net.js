@@ -7,6 +7,7 @@ import { getIceServers } from "./netconfig.js";
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // 紛らわしい文字を除外
 const PROTOCOL_VERSION = 2;
 const PING_INTERVAL_MS = 5000;
+const HEARTBEAT_TIMEOUT_MS = 15000;  // これ以上無通信なら切断とみなす（closeイベント不発対策）
 const GUEST_RETRY_MS = 2500;
 const GUEST_RETRY_MAX = 72;          // ≈3分
 const CONNECT_TIMEOUT_MS = 15000;    // 初回接続の見切り
@@ -51,6 +52,7 @@ export class HostSession {
     this.proposal = null;       // 終了提案 {from, votes:{seat:true}}
     this.resuming = !!(resume && resume.snapshot);
     this.keepCode = !!resume;    // 復帰時は同じ部屋コードを取り直す
+    this.hostSeat = 0;           // 自分が座る席（ホスト引き継ぎ時は0以外になり得る）
     if (resume && resume.snapshot) {
       this.code = resume.code;
       this.hostName = resume.hostName;
@@ -59,10 +61,17 @@ export class HostSession {
       this.openSeats = resume.openSeats ?? this.tableSize - 1;
       this.turnLimit = resume.turnLimit ?? 0;
       this.neo = !!resume.neo;
+      this.hostSeat = resume.hostSeat ?? 0;
       this.seatNames = new Map(resume.seatNames);
       this.seatTokens = new Map(resume.seatTokens);
       this.inGame = true;
-      this.controller = GameController.restore(resume.snapshot, () => this._pushStates());
+      // ホスト引き継ぎ: 自席を human に、他の human（旧ホスト）を remote に振り替える
+      const snap = resume.snapshot;
+      if (snap.seats[this.hostSeat] && snap.seats[this.hostSeat].kind !== "human") {
+        for (const s of snap.seats) if (s.kind === "human") s.kind = "remote";
+        snap.seats[this.hostSeat].kind = "human";
+      }
+      this.controller = GameController.restore(snap, () => this._pushStates());
     } else if (resume && resume.lobby) {
       // ロビー段階の復帰: 同じ部屋コードで開き直す。
       // 席はクリアし、ゲスト側の自動再接続（席トークン付き）で取り直す。
@@ -87,6 +96,16 @@ export class HostSession {
       }
     };
     document.addEventListener("visibilitychange", this._visHandler);
+    // ゲストのping途絶を監視（タブ強制終了などで close が発火しないケース）
+    this._sweepTimer = setInterval(() => {
+      const now = Date.now();
+      for (const conn of [...this.conns.values()]) {
+        if (now - (conn._lastSeen || 0) > HEARTBEAT_TIMEOUT_MS) {
+          try { conn.close(); } catch {}
+          this._onDisconnect(conn);
+        }
+      }
+    }, PING_INTERVAL_MS);
   }
 
   setName(name) {
@@ -124,6 +143,11 @@ export class HostSession {
         if (this.keepCode) {
           // 旧IDの解放待ち（PeerServer側のTTL）
           if (retries > 0) setTimeout(() => this._openPeer(retries - 1), 3000);
+          else if (this.inGame && this.seatTokens.get(this.hostSeat) && this.cb.onDemoted) {
+            // 誰かがホストを引き継いでいる — 自分はゲストとして同じ席に戻る
+            this.cb.onDemoted({ code: this.code, seat: this.hostSeat,
+                                token: this.seatTokens.get(this.hostSeat) });
+          }
           else this.cb.onError("部屋IDの再取得に失敗しました（時間をおいて再試行してください）");
         } else if (retries > 0) {
           this.code = randomCode();
@@ -176,7 +200,9 @@ export class HostSession {
   }
 
   _onConnection(conn) {
+    conn._lastSeen = Date.now();
     conn.on("data", (m) => {
+      conn._lastSeen = Date.now();
       if (!m || typeof m !== "object") return;
       if (m.t === "hello") this._onHello(conn, m);
       else if (m.t === "action" && this.controller && conn._seat !== undefined) {
@@ -217,7 +243,13 @@ export class HostSession {
         if (old && old !== conn) { try { old.close(); } catch {} }
         this.conns.set(seat, conn);
         conn._seat = seat;
-        if (m.name) this.seatNames.set(seat, String(m.name).slice(0, 20));
+        if (m.name) {
+          this.seatNames.set(seat, String(m.name).slice(0, 20));
+          // 再招待で別人が入った場合も対局画面の名前に反映する
+          if (this.controller && this.controller.seats[seat]) {
+            this.controller.seats[seat].name = this.seatNames.get(seat);
+          }
+        }
         conn.send({ t: "welcome", seat, token: rj.token });
         conn.send({ t: "start", yourSeat: seat });
         this.controller._note(`${this.seatNames.get(seat)} が復帰しました`, "info");
@@ -296,6 +328,9 @@ export class HostSession {
       else if (this.seatNames.has(s)) seats.push({ kind: "remote", name: this.seatNames.get(s) });
       else seats.push({ kind: "ai", name: `AI-${s}` });
     }
+    // 自席にも復帰用トークンを発行（ホスト引き継ぎ後に元ホストが席へ戻るため）
+    this.seatNames.set(0, this.hostName);
+    if (!this.seatTokens.has(0)) this.seatTokens.set(0, randomToken());
     this.inGame = true;
     this.controller = new GameController(this.tableSize, seats, this.rounds,
                                          () => this._pushStates(),
@@ -386,8 +421,49 @@ export class HostSession {
     for (const [seat, conn] of this.conns) {
       try { conn.send({ t: "state", view: this._viewFor(seat) }); } catch {}
     }
-    this.cb.onState(this._viewFor(0));
+    this.cb.onState(this._viewFor(this.hostSeat));
     this._persist();
+    this._broadcastBackup();
+  }
+
+  // 接続中の全ゲストに引き継ぎ用バックアップを配る（ホスト消失時に誰でも引き継げる）
+  _broadcastBackup() {
+    if (!this.inGame || !this.controller || !this.conns.size) return;
+    const now = Date.now();
+    if (this._lastBackup && now - this._lastBackup < 3000) return;
+    this._lastBackup = now;
+    const base = {
+      code: this.code,
+      tableSize: this.tableSize,
+      rounds: this.rounds,
+      openSeats: this.openSeats,
+      turnLimit: this.turnLimit,
+      neo: this.neo,
+      seatNames: [...this.seatNames],
+      seatTokens: [...this.seatTokens],
+      snapshot: this.controller.snapshot(),
+    };
+    for (const [seat, conn] of this.conns) {
+      try {
+        conn.send({ t: "backup",
+                    data: { ...base, hostSeat: seat,
+                            hostName: this.seatNames.get(seat) || "ゲスト" } });
+      } catch {}
+    }
+  }
+
+  // 切断中の席（再招待の対象）: {seat, name, token}
+  missingSeats() {
+    if (!this.inGame || !this.controller) return [];
+    const out = [];
+    for (let s = 0; s < this.tableSize; s++) {
+      if (s === this.hostSeat) continue;
+      if (this.controller.seats[s].kind === "remote" && !this.conns.has(s)) {
+        out.push({ seat: s, name: this.seatNames.get(s) || `席${s + 1}`,
+                   token: this.seatTokens.get(s) });
+      }
+    }
+    return out;
   }
 
   _persist() {
@@ -408,6 +484,7 @@ export class HostSession {
         openSeats: this.openSeats,
         turnLimit: this.turnLimit,
         neo: this.neo,
+        hostSeat: this.hostSeat,
         seatNames: [...this.seatNames],
         seatTokens: [...this.seatTokens],
         snapshot: this.controller.snapshot(),
@@ -416,17 +493,18 @@ export class HostSession {
   }
 
   // ホスト自身の操作
-  play(tiles) { return this.controller ? this.controller.play(0, tiles) : "未開始"; }
-  pass() { return this.controller ? this.controller.pass(0) : "未開始"; }
-  playCard(tiles, card) { return this.controller ? this.controller.playWithCard(0, tiles, card) : "未開始"; }
-  newBeginning() { return this.controller ? this.controller.useNewBeginning(0) : "未開始"; }
-  endCard(use) { return this.controller ? this.controller.respondEnding(0, use) : "未開始"; }
-  hostProposeEnd() { this.proposeEnd(0); }
-  hostVote(agree) { this.vote(0, agree); }
+  play(tiles) { return this.controller ? this.controller.play(this.hostSeat, tiles) : "未開始"; }
+  pass() { return this.controller ? this.controller.pass(this.hostSeat) : "未開始"; }
+  playCard(tiles, card) { return this.controller ? this.controller.playWithCard(this.hostSeat, tiles, card) : "未開始"; }
+  newBeginning() { return this.controller ? this.controller.useNewBeginning(this.hostSeat) : "未開始"; }
+  endCard(use) { return this.controller ? this.controller.respondEnding(this.hostSeat, use) : "未開始"; }
+  hostProposeEnd() { this.proposeEnd(this.hostSeat); }
+  hostVote(agree) { this.vote(this.hostSeat, agree); }
 
   destroy() {
     this._destroyed = true;
     document.removeEventListener("visibilitychange", this._visHandler);
+    clearInterval(this._sweepTimer);
     try { sessionStorage.removeItem(STORE_HOST); } catch {}
     try { this.peer && this.peer.destroy(); } catch {}
     this.conns.clear();
@@ -528,22 +606,6 @@ export class GuestSession {
           }
         });
       }, 300);
-      this.conn.on("open", () => {
-        clearTimeout(this._connTimer);
-        clearInterval(watchIce);
-        this.alive = true;
-        this._stage = "open";
-        this._progress(null);
-        this.attempt = 0;
-        const hello = { t: "hello", name: this.name, protocolVersion: PROTOCOL_VERSION };
-        if (this.token !== null) hello.rejoin = { seat: this.seat, token: this.token };
-        this.conn.send(hello);
-        clearInterval(this._pingTimer);
-        this._pingTimer = setInterval(() => {
-          try { this.conn.send({ t: "ping" }); } catch {}
-        }, PING_INTERVAL_MS);
-      });
-      this.conn.on("data", (m) => this._onData(m));
       const lost = () => {
         if (this.stopped || !this.alive) return;
         this.alive = false;
@@ -551,6 +613,25 @@ export class GuestSession {
         if (this.started || this.joined) this._scheduleRetry();
         else this.cb.onHostLost();
       };
+      this.conn.on("open", () => {
+        clearTimeout(this._connTimer);
+        clearInterval(watchIce);
+        this.alive = true;
+        this._stage = "open";
+        this._progress(null);
+        this.attempt = 0;
+        this._lastSeen = Date.now();
+        const hello = { t: "hello", name: this.name, protocolVersion: PROTOCOL_VERSION };
+        if (this.token !== null) hello.rejoin = { seat: this.seat, token: this.token };
+        this.conn.send(hello);
+        clearInterval(this._pingTimer);
+        this._pingTimer = setInterval(() => {
+          try { this.conn.send({ t: "ping" }); } catch {}
+          // ホスト途絶の検知（closeイベントが発火しないケースの保険）
+          if (Date.now() - this._lastSeen > HEARTBEAT_TIMEOUT_MS) lost();
+        }, PING_INTERVAL_MS);
+      });
+      this.conn.on("data", (m) => { this._lastSeen = Date.now(); this._onData(m); });
       this.conn.on("close", lost);
       this.conn.on("error", lost);
     });
@@ -560,6 +641,15 @@ export class GuestSession {
     if (this.stopped) return;
     this.attempt++;
     if (this.attempt > GUEST_RETRY_MAX) { this.cb.onHostLost(); return; }
+    // ホスト引き継ぎ: バックアップを持っていて復帰が続かないなら自分がホストになる
+    // （席番号でずらして同時引き継ぎの衝突を避ける。衝突しても ID 重複で片方が退く）
+    if (this.backup && this.started && this.cb.onTakeover &&
+        this.attempt >= 4 + this.seat * 2) {
+      const data = this.backup;
+      this.backup = null;
+      this.cb.onTakeover(data);
+      return;
+    }
     this.cb.onReconnecting(this.attempt);
     clearTimeout(this._retryTimer);
     this._retryTimer = setTimeout(() => this._connect(), GUEST_RETRY_MS);
@@ -582,6 +672,7 @@ export class GuestSession {
         break;
       }
       case "lobby": this.started = false; this.cb.onLobby(m.seats); break;
+      case "backup": this.backup = m.data; break;
       case "start": this.started = true; this.cb.onStart(); break;
       case "state": this.started = true; this.cb.onState(m.view); break;
       case "reject": this.cb.onReject(m.reason); break;
