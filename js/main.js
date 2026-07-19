@@ -657,10 +657,24 @@ function renderNeoUI(view) {
   }
 }
 
-// カード扇を手牌の右端に追従させる
+// カード扇を手牌の右端に追従させる（縦画面では常にスタック+手牌高さを盤面に反映）
+const PORTRAIT_MQ = window.matchMedia("(orientation: portrait) and (max-width: 600px)");
 function positionCardFan() {
   const wrap = $("my-cards");
   const tiles = document.querySelectorAll("#my-hand .tile");
+  const stage = $("game-stage");
+  if (PORTRAIT_MQ.matches) {
+    // 手牌は枚数で1〜2段に変わるため、実測高さで卓とボタンの位置を追従させる
+    // （画面非表示中は0になるので既定値のまま次の描画で追従）
+    const h = $("my-hand").offsetHeight;
+    if (h > 0) stage.style.setProperty("--hand-area", `${Math.max(120, h + 12)}px`);
+    if (wrap.childElementCount) {
+      wrap.classList.add("stack");
+      wrap.style.left = ""; wrap.style.right = ""; wrap.style.bottom = "";
+    }
+    return;
+  }
+  stage.style.removeProperty("--hand-area");
   if (!wrap.childElementCount) { wrap.style.left = ""; wrap.style.right = ""; return; }
   if (tiles.length) {
     const r = tiles[tiles.length - 1].getBoundingClientRect();
@@ -948,6 +962,7 @@ window.addEventListener("DOMContentLoaded", () => {
     // それ以外の牌は通常の役選択として素通し
   }, true);
   window.addEventListener("resize", positionCardFan);
+  PORTRAIT_MQ.addEventListener?.("change", positionCardFan);
 
   // 思考時間の残りカウントダウン（出すボタンの隣に表示）
   setInterval(() => {

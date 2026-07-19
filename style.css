@@ -677,16 +677,6 @@ button.hint-glow{
   box-shadow:0 6px 18px rgba(0,0,0,.5);
 }
 
-/* ---- 縦持ち案内（モバイル） ---- */
-.orientation-hint{display:none}
-@media (orientation:portrait) and (max-width:600px){
-  .orientation-hint{
-    display:flex;position:absolute;inset:0;z-index:60;
-    background:rgba(4,5,7,.94);align-items:center;justify-content:center;
-  }
-  .oh-box{font-size:20px;font-weight:700;text-align:center;line-height:2;color:var(--gold)}
-}
-
 /* ============ オーバーレイ（ルール） ============ */
 .overlay{position:fixed;inset:0;background:rgba(3,4,6,.85);display:flex;
   align-items:center;justify-content:center;z-index:80;backdrop-filter:blur(3px)}
@@ -776,4 +766,76 @@ button.hint-glow{
 @media (max-width:640px){
   .seat-hist{max-width:150px}
   .pos-l .seat-hist,.pos-r .seat-hist{max-width:90px}
+}
+
+/* ============ スマホ縦画面: 相手席を上列に再配置 ============ */
+@media (orientation:portrait) and (max-width:600px){
+  #game-stage{--hand-area:150px}
+  .tile{--w:40px;--h:56px}
+  .tile .num{font-size:18px}
+  .tile .gly{font-size:10px}
+  .tile.flat{--w:30px;--h:42px}
+  .tile.flat .num{font-size:14px}
+  .tile.mini{--w:18px;--h:26px}
+  .tile.mini .num{font-size:9px !important}
+  .ci-meld{gap:4px}
+  .ci-meld .tile.flat{--w:40px;--h:54px}
+  .ci-meld .tile.flat .num{font-size:17px}
+
+  .table3d{bottom:var(--hand-area,150px)}
+  /* 相手席は上端の一列（round表示/☰の下の帯） */
+  .seat,.pos-l,.pos-r,.pos-tl,.pos-tr{max-width:24%}
+  .pos-t {top:40px;left:50%;right:auto;bottom:auto;transform:translateX(-50%);flex-direction:column;gap:3px}
+  .pos-l {top:40px;left:2%;right:auto;bottom:auto;transform:none;flex-direction:column;gap:3px}
+  .pos-r {top:40px;right:2%;left:auto;bottom:auto;transform:none;flex-direction:column;gap:3px}
+  .pos-tl{top:40px;left:26%;right:auto;bottom:auto;transform:none;flex-direction:column;gap:3px}
+  .pos-tr{top:40px;right:26%;left:auto;bottom:auto;transform:none;flex-direction:column;gap:3px}
+  .pos-b{max-width:96%;bottom:2px}
+  .avatar{width:36px;height:36px;font-size:15px}
+  .id-badge{font-size:10px;padding:2px 8px;margin-top:-8px;max-width:86px}
+  .pass-chip{font-size:10px;padding:3px 9px}
+  .seat-hist{display:none}
+  .seat-hand{max-width:110px}
+  .seat-meld{min-height:18px}
+
+  .center-info{top:38%}
+  .net-banner{top:96px;white-space:normal;max-width:94%;font-size:11px;padding:6px 12px}
+
+  /* 操作: 手牌の直上に左右分置 */
+  .side-btn{bottom:calc(var(--hand-area,150px) + 8px)}
+  .side-left{left:8px}
+  .side-right{right:8px}
+  .side-btn .primary,button.side-btn.ghost,.side-btn .ghost{
+    padding:11px 20px;font-size:15px;border-radius:10px}
+  .turn-timer{font-size:22px;min-width:28px}
+  .action-msg{bottom:calc(var(--hand-area,150px) + 60px);max-width:92%}
+  .my-info{left:8px;bottom:calc(var(--hand-area,150px) + 64px)}
+  .my-hand{padding:10px 4px calc(6px + env(safe-area-inset-bottom));gap:2px}
+
+  /* Neoカード: 常に右下スタック（JSが.stackを強制） */
+  .my-cards,.my-cards.stack{right:8px;bottom:calc(var(--hand-area,150px) + 70px);padding-left:0}
+  .ncard{width:58px;height:84px;margin-left:-30px}
+  .my-cards.stack .ncard{margin-left:-44px}
+  .ncard:hover{transform:rotate(0deg) translateY(-30px) scale(1.4)}
+  .card-ctx{left:50%;right:auto;transform:translateX(-50%);justify-content:center;
+    bottom:calc(var(--hand-area,150px) + 150px);max-width:94%}
+
+  /* 結果は中央モーダル、チップは下中央 */
+  .result-panel{top:50%;left:50%;right:auto;transform:translate(-50%,-50%);
+    width:min(92vw,360px);max-height:78vh;padding:14px 16px}
+  .result-chip{top:auto;right:auto;left:50%;transform:translateX(-50%);
+    bottom:calc(var(--hand-area,150px) + 8px)}
+
+  .tut-hint{top:56%;width:min(360px,92%);font-size:12px;padding:12px 14px}
+
+  /* ロビー / 設定 */
+  #lobby-stage .table3d{bottom:150px}   /* 自席を名前入力より上へ */
+  .lobby-center{top:44%;width:min(480px,92%)}
+  .lobby-code-badge b{font-size:16px}
+  .lobby-bottom{bottom:70px}
+  .stage-back,.stage-ok{bottom:12px;padding:12px 24px;font-size:15px}
+  .stage-back{left:8px}
+  .stage-ok{right:8px}
+  .stepper-label{width:96px;font-size:13px}
+  .step-value{min-width:130px;font-size:15px;padding:9px 0}
 }
