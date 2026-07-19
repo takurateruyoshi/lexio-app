@@ -31,6 +31,25 @@ const showHistory = () => $("history-toggle").checked;
 
 function rerender() { if (lastView) onViewUpdate(lastView); }
 
+// 対局系の操作をきっかけに画面いっぱいの全画面表示へ（非対応環境では何もしない）
+function goFullscreen() {
+  try {
+    if (document.fullscreenElement) return;
+    const el = document.documentElement;
+    const f = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (f) { const p = f.call(el); if (p && p.catch) p.catch(() => {}); }
+  } catch {}
+}
+function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement) {
+      document.exitFullscreen && document.exitFullscreen();
+    } else {
+      goFullscreen();
+    }
+  } catch {}
+}
+
 // ---- 上部バナー（一時停止 / 再接続 / 終了提案 / 練習ヒント） ----
 function renderBanner(view) {
   const b = $("net-banner");
@@ -371,6 +390,7 @@ function showJoinOverlay(code) {
   $("join-hint").textContent = "";
   $("join-overlay").classList.remove("hidden");
   $("join-go-btn").onclick = () => {
+    goFullscreen();
     const name = ($("join-name").value.trim() || "あなた");
     saveName(name);
     $("join-hint").textContent = "部屋に接続中...";
@@ -564,9 +584,9 @@ function renderNeoUI(view) {
     wrap.innerHTML = ""; ctx.classList.add("hidden"); return;
   }
   wrap.innerHTML = "";
-  for (const c of view.myCards) {
+  view.myCards.forEach((c, ci) => {
     const b = document.createElement("button");
-    b.className = "ncard art-" + c.id + (armedCard && armedCard.id === c.id ? " armed" : "")
+    b.className = "ncard art-" + c.id + (armedCard && armedCard.idx === ci ? " armed" : "")
       + (view.cardUsed ? " used" : "");
     b.disabled = view.cardUsed || view.terminal;
     b.innerHTML = `
@@ -579,7 +599,7 @@ function renderNeoUI(view) {
         const a = actor(); setActionMessage(a.newBeginning()); return;
       }
       if (CARD_DEFS_TYPE(c) === "ending") { setActionMessage("精算のタイミングで自動的に確認します"); return; }
-      armedCard = (armedCard && armedCard.id === c.id) ? null : { id: c.id };
+      armedCard = (armedCard && armedCard.idx === ci) ? null : { id: c.id, idx: ci };
       if (armedCard && armedCard.id === "unwanted_gift") {
         clearSelection();
         document.querySelectorAll("#my-hand .tile.selected")
@@ -588,7 +608,7 @@ function renderNeoUI(view) {
       renderNeoUI(view);
     });
     wrap.appendChild(b);
-  }
+  });
   positionCardFan();
   // コンテキスト: 対象/渡す牌は盤面から直接タップ。ジョーカーの数字は自動判定
   ctx.innerHTML = "";
@@ -802,8 +822,8 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // タイトル
   $("battle-btn").addEventListener("click", goSetup);
-  $("resume-btn").addEventListener("click", resumeSolo);
-  $("tutorial-btn").addEventListener("click", startTutorial);
+  $("resume-btn").addEventListener("click", () => { goFullscreen(); resumeSolo(); });
+  $("tutorial-btn").addEventListener("click", () => { goFullscreen(); startTutorial(); });
   $("join-room-btn").addEventListener("click", () => {
     const code = $("join-code").value.trim();
     if (code.length < 4) { $("title-hint").textContent = "部屋コードを入力してください"; return; }
@@ -821,7 +841,7 @@ window.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".step-btn").forEach((b) => {
     b.addEventListener("click", () => stepSetting(b.dataset.k, parseInt(b.dataset.d, 10)));
   });
-  $("setup-go-btn").addEventListener("click", setupGo);
+  $("setup-go-btn").addEventListener("click", () => { goFullscreen(); setupGo(); });
   $("setup-back-btn").addEventListener("click", () => showScreen("title"));
 
   // ロビー
@@ -848,6 +868,7 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   // ゲーム内
+  $("fullscreen-btn").addEventListener("click", toggleFullscreen);
   $("menu-btn").addEventListener("click", (e) => {
     e.stopPropagation();
     $("menu-panel").classList.toggle("hidden");
