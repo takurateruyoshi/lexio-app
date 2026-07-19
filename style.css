@@ -843,16 +843,27 @@ button.hint-glow{
   .ci-meld .tile.flat .num{font-size:17px}
 
   .table3d{bottom:var(--hand-area,150px)}
-  /* 相手席は上端の一列（round表示/☰の下の帯） */
+  /* 上部バー: メニューとラウンド表示は小さく上端へ（席と重ねない） */
+  .top-menu{top:6px;right:8px}
+  #menu-btn{font-size:14px;padding:5px 10px}
+  .round-indicator{top:9px;left:8px;font-size:10px;padding:3px 9px}
+  /* 相手席は上部バーの下の一列 */
   .seat,.pos-l,.pos-r,.pos-tl,.pos-tr{max-width:24%}
-  .pos-t {top:40px;left:50%;right:auto;bottom:auto;transform:translateX(-50%);flex-direction:column;gap:3px}
-  .pos-l {top:40px;left:2%;right:auto;bottom:auto;transform:none;flex-direction:column;gap:3px}
-  .pos-r {top:40px;right:2%;left:auto;bottom:auto;transform:none;flex-direction:column;gap:3px}
-  .pos-tl{top:40px;left:26%;right:auto;bottom:auto;transform:none;flex-direction:column;gap:3px}
-  .pos-tr{top:40px;right:26%;left:auto;bottom:auto;transform:none;flex-direction:column;gap:3px}
+  .pos-t {top:52px;left:50%;right:auto;bottom:auto;transform:translateX(-50%);flex-direction:column;gap:3px}
+  .pos-l {top:52px;left:6px;right:auto;bottom:auto;transform:none;flex-direction:column;gap:3px}
+  .pos-r {top:52px;right:6px;left:auto;bottom:auto;transform:none;flex-direction:column;gap:3px}
+  .pos-tl{top:52px;left:26%;right:auto;bottom:auto;transform:none;flex-direction:column;gap:3px}
+  .pos-tr{top:52px;right:26%;left:auto;bottom:auto;transform:none;flex-direction:column;gap:3px}
   .pos-b{max-width:96%;bottom:2px}
+  /* 端の席は内側に寄せて、バッジ類が画面外に見切れないように */
+  .pos-l .seat-info,.pos-tl .seat-info{align-items:flex-start}
+  .pos-r .seat-info,.pos-tr .seat-info{align-items:flex-end}
+  .pos-l .seat-zone,.pos-tl .seat-zone{align-items:flex-start}
+  .pos-r .seat-zone,.pos-tr .seat-zone{align-items:flex-end}
+  .pos-r .count-badge,.pos-tr .count-badge{right:0}
   .avatar{width:36px;height:36px;font-size:15px}
-  .id-badge{font-size:10px;padding:2px 8px;margin-top:-8px;max-width:86px}
+  .id-badge{font-size:10px;padding:2px 8px;margin-top:-8px;max-width:96px}
+  .my-info .id-badge{max-width:170px}   /* 自分の名前+点数は省略しない */
   .pass-chip{font-size:10px;padding:3px 9px}
   .seat-hist{display:none}
   .seat-hand{max-width:110px}
