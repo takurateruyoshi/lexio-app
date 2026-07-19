@@ -1,0 +1,59 @@
+name: collect-game-records
+
+# 毎時、headless Chrome で collector.html を約50分開いて P2P 牌譜を受信し、
+# game-data ブランチに JSONL を蓄積する（受信の都度 push するため途中クラッシュでも損失は最小）。
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "受信を続ける分数"
+        default: "50"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collector          # ピアID重複を防ぐため直列化（実行中は次回分が待機）
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 58
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install puppeteer-core (CI only)
+        run: npm i --no-save --no-package-lock puppeteer-core@23
+
+      - name: Prepare game-data worktree
+        run: |
+          if git ls-remote --exit-code origin game-data > /dev/null 2>&1; then
+            git fetch origin game-data
+            git worktree add gdata origin/game-data
+          else
+            git worktree add --detach gdata
+            cd gdata
+            git checkout --orphan game-data
+            git rm -rf --quiet . || true
+            git -c user.name="lexio-collector[bot]" \
+                -c user.email="lexio-collector[bot]@users.noreply.github.com" \
+                commit --allow-empty -m "init game-data branch"
+            git push origin game-data
+          fi
+
+      - name: Run headless collector
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: |
+          node tools/collector_headless.mjs \
+            --minutes "${{ github.event.inputs.minutes || '50' }}" \
+            --out gdata --git-dir gdata

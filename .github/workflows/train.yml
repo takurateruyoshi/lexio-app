@@ -1,8 +1,9 @@
 name: continuous-selfplay-training
 
-# 正準モデル（model/weights.json）の継続学習。
-# 6時間ごとに自己対戦学習を回し、ゲート（現行モデルに劣らない）を
-# 通過した場合のみ重みをコミットする（Pages が自動再配信）。
+# 正準モデル（model/weights.json）の継続学習 — 二系統 + アリーナ選抜。
+# 6時間ごとに、自己対戦EV系統と人間模倣ブレンド系統（収集牌譜があれば）を学習し、
+# 現行チャンピオンとの3者アリーナで最も強い θ を weights.json に昇格させる
+# （Pages が自動再配信）。牌譜は collect ワークフローが game-data ブランチに蓄積する。
 on:
   schedule:
     - cron: "0 */6 * * *"
@@ -28,17 +29,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Self-play training
-        run: node tools/train_selfplay.mjs --minutes ${{ github.event.inputs.minutes || 20 }}
-      - name: Commit updated weights (if improved)
+      - name: Fetch collected game records (game-data branch)
         run: |
-          if ! git diff --quiet model/; then
+          if git ls-remote --exit-code origin game-data > /dev/null 2>&1; then
+            git fetch origin game-data
+            git checkout origin/game-data -- games/ 2>/dev/null || echo "game-data branch has no games/ yet"
+            git rm -r --cached games 2>/dev/null || true
+            echo "records: $(find games -name '*.jsonl' 2>/dev/null | wc -l) files"
+          else
+            echo "no game-data branch yet — self-play only"
+          fi
+      - name: Two-lineage training + arena
+        run: node tools/train_evolve.mjs --minutes ${{ github.event.inputs.minutes || 20 }} --records games
+      - name: Commit updated weights
+        run: |
+          if [ -n "$(git status --porcelain model/)" ]; then
             git config user.name "lexio-trainer[bot]"
             git config user.email "actions@github.com"
             git add model/
-            git commit -m "model: self-play training update (gen $(node -p "require('./model/weights.json').gen"))"
+            git commit -m "model: evolve training update (gen $(node -p "try{require('./model/weights.json').gen}catch{0}"))"
             git pull --rebase origin main
             git push
           else
-            echo "no improvement — weights unchanged"
+            echo "no changes"
           fi

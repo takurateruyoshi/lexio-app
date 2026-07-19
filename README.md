@@ -43,9 +43,16 @@
 
 ## 継続学習（常時・中央集約）
 
-- `tools/train_selfplay.mjs` がクロスエントロピー法の自己対戦で θ を最適化します。
-- GitHub Actions（`.github/workflows/train.yml`）が **6時間ごと**に学習を実行し、
-  現行モデルに劣らない場合のみ `model/weights.json` を更新（Pages が自動再配信）。
+- `tools/train_evolve.mjs` が**二系統**で θ を学習します:
+  自己対戦EVのみのCEM（系統A）と、収集牌譜の「勝った人間の着手との一致率」を
+  ブレンドしたCEM（系統B、牌譜不足時は自動でEVのみにフォールバック）。
+  最後に A・B・現行チャンピオンの3者アリーナで最も強い θ だけを
+  `model/weights.json` に昇格させ、勝者を次世代の起点に繋ぎます
+  （系統の最新候補は `model/weights_selfplay.json` / `model/weights_human.json`、
+  経過は `model/history.json`）。
+- GitHub Actions（`.github/workflows/train.yml`）が **6時間ごと**に実行し、
+  昇格があれば `model/weights.json` を更新（Pages が自動再配信）。
+  旧 `tools/train_selfplay.mjs`（自己対戦のみ）も残してあります。
 - 全クライアントは同じ正準モデルを読み込むため、ブラウザごとにAIが分岐しません。
 
 ## 対局データの収集（研究用・二段構え）
@@ -54,9 +61,14 @@
   `model/collect.json` の設定に従って送信されます（フッタのトグルでオプトアウト可）。
   1. `httpUrl` が設定されていれば gzip バッチPOST（Cloudflare Worker 等。雛形と手順は
      `tools/cloudflare/README.md`）
-  2. 未設定/失敗時は **P2P収集ピア**へ: 研究者が [collector.html](collector.html) を
-     開いている間、牌譜がP2Pで届き蓄積されます（JSONLエクスポート可）。
+  2. 未設定/失敗時は **P2P収集ピア**へ: [collector.html](collector.html) が
+     開かれている間、牌譜がP2Pで届き蓄積されます（JSONLエクスポート可）。
 - 送れなかった分はローカルに残り、定期的に再送されます。
+- **自動収集**: GitHub Actions（`.github/workflows/collect.yml`）が毎時、
+  headless Chrome で収集ピアを約50分間開き、受信した牌譜を
+  `game-data` ブランチに JSONL として蓄積します（`tools/collector_headless.mjs`）。
+  牌譜は匿名化済みですが、公開リポジトリのブランチに置かれる点に留意してください。
+  学習ワークフローはこのブランチを参照します。
 
 ## AI観戦・記録モード（研究用）
 
