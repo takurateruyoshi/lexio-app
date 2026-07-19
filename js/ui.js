@@ -82,9 +82,9 @@ function renderTable(view, showHistory) {
       info.innerHTML = `
         <div class="avatar" style="--hue:${hue}">
           <span>${(p.name || "?").slice(0, 1)}</span>
-          <span class="count-badge">×${p.count}</span>
+          <span class="count-badge">×${p.count}${view.cardCounts ? ` 🃏${view.cardCounts[p.index]}` : ""}</span>
         </div>
-        <div class="id-badge">${p.name}${p.finished ? " 👑" : ""}<b>${p.points}点</b>${view.cardCounts ? `<i>🃏${view.cardCounts[p.index]}</i>` : ""}</div>`;
+        <div class="id-badge">${p.name}${p.finished ? " 👑" : ""}<b>${p.points}点</b></div>`;
       if (histEl) info.appendChild(histEl);
       seat.appendChild(info);
     }

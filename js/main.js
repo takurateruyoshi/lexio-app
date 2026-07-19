@@ -42,8 +42,14 @@ function goFullscreen() {
 }
 function toggleFullscreen() {
   try {
-    if (document.fullscreenElement) {
-      document.exitFullscreen && document.exitFullscreen();
+    const el = document.documentElement;
+    if (!(el.requestFullscreen || el.webkitRequestFullscreen)) {
+      // iPhone Safari は全画面API非対応 — ホーム画面追加(PWA)で全画面起動できる
+      alert("この端末のブラウザは全画面表示に対応していません。\n共有メニューから「ホーム画面に追加」すると、次回から全画面で起動できます。");
+      return;
+    }
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
     } else {
       goFullscreen();
     }
@@ -675,7 +681,7 @@ function positionCardFan() {
     // 実測高さで卓とボタンの位置を追従させる
     // （画面非表示中は0になるので既定値のまま次の描画で追従）
     const h = hand.offsetHeight;
-    if (h > 0) stage.style.setProperty("--hand-area", `${Math.max(120, h + 12)}px`);
+    if (h > 0) stage.style.setProperty("--hand-area", `${Math.max(96, h + 2)}px`);
     if (wrap.childElementCount) {
       wrap.classList.add("stack");
       wrap.style.left = ""; wrap.style.right = ""; wrap.style.bottom = "";

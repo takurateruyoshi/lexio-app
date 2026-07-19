@@ -3,7 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lexio">
+<meta name="theme-color" content="#0c0d10">
 <title>レキシオ — オンライン対戦</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -93,10 +100,11 @@
   <!-- ロビー -->
   <section id="screen-lobby" class="hidden">
     <div id="lobby-stage">
-      <div class="lobby-code-badge">部屋コード <b id="room-code">-----</b>
-        <button id="copy-code-btn" class="ghost small">コピー</button></div>
+      <h1 class="stage-title">対戦ロビー</h1>
       <div id="lobby-seats" class="table3d"></div>
       <div class="lobby-center">
+        <div class="lobby-code-badge">部屋コード <b id="room-code">-----</b>
+          <button id="copy-code-btn" class="ghost small">コピー</button></div>
         <div class="lobby-invite">
           <input id="invite-link" type="text" readonly>
           <button id="copy-link-btn" class="ghost small">リンクをコピー</button>

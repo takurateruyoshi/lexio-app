@@ -15,7 +15,7 @@
   --base1:#3a3d45; --base2:#22242a; --base3:#101216;  /* 牌の土台（黒） */
 }
 *{box-sizing:border-box}
-html,body{height:100%}
+html,body{height:100%;touch-action:manipulation}   /* ダブルタップ拡大を無効化 */
 body{
   margin:0;color:var(--text);
   font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Segoe UI",system-ui,sans-serif;
@@ -69,10 +69,50 @@ button.small{padding:6px 12px;font-size:12px}
 .hint{color:var(--muted);font-size:12px;margin-top:10px;min-height:16px}
 
 /* ============ タイトル / 対戦設定 ============ */
+/* タイトルも対戦設定と同じフルスクリーンステージ（フェルト背景）で統一 */
 .title-screen{
-  max-width:520px;margin:10vh auto 0;text-align:center;
-  display:flex;flex-direction:column;align-items:center;gap:8px;
+  position:fixed;inset:0;z-index:5;overflow-y:auto;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:8px;text-align:center;padding:26px 20px;
+  background:
+    radial-gradient(120% 130% at 50% 34%, var(--felt1) 0%, var(--felt2) 55%, var(--felt3) 100%);
+  box-shadow:inset 0 0 160px rgba(0,0,0,.75);
 }
+/* 主ボタンは対戦設定の「▶」ボタンと同じ斜体スタイル */
+.title-actions button.big{
+  border:none;border-radius:0;transform:skewX(-8deg);
+  clip-path:polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);
+  font-size:19px;font-weight:800;letter-spacing:.14em;padding:16px 44px;
+  white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis;
+  transition:transform .12s, filter .12s;
+}
+.title-actions .primary.big{
+  background:linear-gradient(180deg,var(--gold),#c99a3e);color:#2a1e06;
+  box-shadow:0 6px 20px rgba(233,196,106,.35);
+}
+.title-actions .primary.alt.big{
+  background:linear-gradient(180deg,#8fd8b8,#3fae7e 45%,#2b7d59);color:#03261a;
+  box-shadow:0 6px 20px rgba(63,174,126,.35);
+}
+.title-actions button.big:hover:not(:disabled){
+  transform:skewX(-8deg) scale(1.06);filter:brightness(1.1);
+}
+#tutorial-btn{
+  border:none;border-radius:0;transform:skewX(-8deg);
+  clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);
+  background:rgba(0,0,0,.55);color:rgba(255,255,255,.85);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.2);
+  font-weight:800;letter-spacing:.1em;padding:12px 26px;font-size:15px;
+}
+#tutorial-btn:hover{transform:skewX(-8deg) scale(1.06);filter:brightness(1.1);
+  background:rgba(0,0,0,.55)}
+/* 部屋コード入力は対戦設定の値プレートと同じ象牙スタイル */
+#join-code{
+  background:linear-gradient(180deg,#faf8f0,#e9e4d4);color:#26221a;
+  font-weight:800;text-align:center;border:none;border-radius:0;
+  clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+}
+#join-code::placeholder{color:#8a8270;font-weight:600}
 .logo{font-size:64px;font-weight:900;letter-spacing:.02em;margin:0 0 18px;
   display:flex;align-items:baseline;justify-content:center;gap:2px}
 .logo .lx{color:#fff}
@@ -127,10 +167,6 @@ button.choice.active{
     radial-gradient(120% 130% at 50% 34%, var(--felt1) 0%, var(--felt2) 55%, var(--felt3) 100%);
   box-shadow:inset 0 0 160px rgba(0,0,0,.75);
 }
-#setup-stage::before{
-  content:"";position:absolute;inset:10px;border-radius:22px;
-  border:1px solid rgba(255,255,255,.07);pointer-events:none;
-}
 .stage-title{
   font-size:26px;font-weight:800;color:var(--gold);letter-spacing:.35em;
   margin:4px 0 22px;text-shadow:0 0 24px rgba(233,196,106,.35);
@@ -164,6 +200,7 @@ button.choice.active{
 .stage-back,.stage-ok{
   position:absolute;bottom:26px;border:none;
   font-size:19px;font-weight:800;letter-spacing:.14em;
+  min-width:210px;text-align:center;   /* 文字数によらず左右で同じ大きさに */
   padding:15px 40px;transform:skewX(-8deg);
   clip-path:polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);
   transition:transform .12s, filter .12s;
@@ -209,19 +246,21 @@ button.choice.active{
     radial-gradient(120% 130% at 50% 34%, var(--felt1) 0%, var(--felt2) 55%, var(--felt3) 100%);
   box-shadow:inset 0 0 160px rgba(0,0,0,.75);
 }
-#lobby-stage::before{
-  content:"";position:absolute;inset:10px;border-radius:22px;
-  border:1px solid rgba(255,255,255,.07);pointer-events:none;
-}
 #lobby-stage .table3d{bottom:76px}
-.lobby-code-badge{
-  position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:20;
-  display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);
-  background:linear-gradient(180deg,rgba(38,40,48,.95),rgba(16,17,21,.95));
-  clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
-  padding:6px 14px;white-space:nowrap;
+#lobby-stage .stage-title{
+  position:absolute;top:16px;left:50%;transform:translateX(-50%);margin:0;z-index:20;
 }
-.lobby-code-badge b{font-size:22px;font-weight:800;letter-spacing:.25em;color:var(--gold)}
+#lobby-stage .pos-t{top:12%}
+/* 部屋コードは招待リンクの直上・対戦設定の値プレートと同じ象牙スタイル */
+.lobby-code-badge{
+  display:flex;align-items:center;gap:10px;font-size:13px;color:#6b6353;
+  background:linear-gradient(180deg,#faf8f0,#e9e4d4);
+  clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+  padding:9px 18px;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.45);
+}
+.lobby-code-badge b{font-size:22px;font-weight:800;letter-spacing:.25em;color:#26221a}
+.lobby-code-badge .ghost{color:#26221a;border-color:rgba(0,0,0,.25);background:rgba(0,0,0,.06)}
+.lobby-code-badge .ghost:hover:not(:disabled){background:rgba(0,0,0,.12)}
 .lobby-center{
   position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);z-index:15;
   display:flex;flex-direction:column;align-items:center;gap:8px;width:min(480px,86%);
@@ -252,10 +291,6 @@ button.choice.active{
     radial-gradient(120% 130% at 50% 34%, var(--felt1) 0%, var(--felt2) 55%, var(--felt3) 100%);
   box-shadow:inset 0 0 160px rgba(0,0,0,.75);
 }
-#game-stage::before{ /* 卓の縁 */
-  content:"";position:absolute;inset:10px;border-radius:22px;
-  border:1px solid rgba(255,255,255,.07);pointer-events:none;
-}
 
 /* 卓（席が置かれる領域: 手牌の上まで） */
 .table3d{position:absolute;left:0;right:0;top:0;bottom:112px}
@@ -285,7 +320,7 @@ button.choice.active{
 .count-badge{
   position:absolute;right:-11px;top:-5px;
   font-size:10px;font-weight:800;color:var(--text);
-  padding:1px 7px;
+  padding:1px 7px;white-space:nowrap;
 }
 /* 鋭角バッジ（ピル型を廃止した共通スタイル） */
 .id-badge,.round-indicator,.pass-chip,.count-badge{
@@ -626,6 +661,9 @@ button.hint-glow{
 .tut-hint.show{opacity:1;pointer-events:auto}
 .tut-hint b{color:var(--gold)}
 .tut-hint .tut-snippet{margin-top:10px}
+/* チュートリアル内のルール例は中央寄せ */
+.tut-hint .rule-row,.tut-snippet .rule-row{justify-content:center}
+.tut-hint .rule-label,.tut-snippet .rule-label{min-width:0}
 
 /* ルールの ✓✗ マーク */
 .mark-ok{color:#5cd08a;font-weight:800;font-size:18px;margin-right:6px}
@@ -801,15 +839,15 @@ button.hint-glow{
   .center-info{top:38%}
   .net-banner{top:96px;white-space:normal;max-width:94%;font-size:11px;padding:6px 12px}
 
-  /* 操作: 手牌の直上に左右分置 */
-  .side-btn{bottom:calc(var(--hand-area,150px) + 8px)}
+  /* 操作: 手牌の直上に左右分置（隙間は最小限） */
+  .side-btn{bottom:calc(var(--hand-area,150px) + 2px)}
   .side-left{left:8px}
   .side-right{right:8px}
   .side-btn .primary,button.side-btn.ghost,.side-btn .ghost{
     padding:11px 20px;font-size:15px;border-radius:10px}
   .turn-timer{font-size:22px;min-width:28px}
-  .action-msg{bottom:calc(var(--hand-area,150px) + 60px);max-width:92%}
-  .my-info{left:8px;bottom:calc(var(--hand-area,150px) + 64px)}
+  .action-msg{bottom:calc(var(--hand-area,150px) + 52px);max-width:92%}
+  .my-info{left:8px;bottom:calc(var(--hand-area,150px) + 54px)}
   /* 手牌は常に1行: 枚数に応じてJSが --hand-w を設定（最大40px） */
   .my-hand{padding:10px 4px calc(6px + env(safe-area-inset-bottom));gap:2px;flex-wrap:nowrap}
   .my-hand .tile{--w:var(--hand-w,min(40px,7vw));--h:calc(var(--w)*1.4)}
@@ -817,7 +855,7 @@ button.hint-glow{
   .my-hand .tile .gly{font-size:calc(var(--w)*.25)}
 
   /* Neoカード: 常に右下スタック（JSが.stackを強制） */
-  .my-cards,.my-cards.stack{right:8px;bottom:calc(var(--hand-area,150px) + 70px);padding-left:0}
+  .my-cards,.my-cards.stack{right:8px;bottom:calc(var(--hand-area,150px) + 60px);padding-left:0}
   .ncard{width:58px;height:84px;margin-left:-30px}
   .my-cards.stack .ncard{margin-left:-44px}
   .ncard:hover{transform:rotate(0deg) translateY(-30px) scale(1.4)}
@@ -828,16 +866,19 @@ button.hint-glow{
   .result-panel{top:50%;left:50%;right:auto;transform:translate(-50%,-50%);
     width:min(92vw,360px);max-height:78vh;padding:14px 16px}
   .result-chip{top:auto;right:auto;left:50%;transform:translateX(-50%);
-    bottom:calc(var(--hand-area,150px) + 8px)}
+    bottom:calc(var(--hand-area,150px) + 4px)}
 
   .tut-hint{top:56%;width:min(360px,92%);font-size:12px;padding:12px 14px}
 
   /* ロビー / 設定 */
   #lobby-stage .table3d{bottom:150px}   /* 自席を名前入力より上へ */
+  #lobby-stage .stage-title{font-size:18px;top:12px}
+  #lobby-stage .pos-t,#lobby-stage .pos-l,#lobby-stage .pos-r,
+  #lobby-stage .pos-tl,#lobby-stage .pos-tr{top:52px}   /* タイトルの下から */
   .lobby-center{top:44%;width:min(480px,92%)}
-  .lobby-code-badge b{font-size:16px}
+  .lobby-code-badge b{font-size:18px}
   .lobby-bottom{bottom:70px}
-  .stage-back,.stage-ok{bottom:12px;padding:12px 24px;font-size:15px}
+  .stage-back,.stage-ok{bottom:12px;padding:12px 24px;font-size:15px;min-width:160px}
   .stage-back{left:8px}
   .stage-ok{right:8px}
   .stepper-label{width:96px;font-size:13px}
