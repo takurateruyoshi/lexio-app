@@ -959,8 +959,8 @@ window.addEventListener("DOMContentLoaded", () => {
   $("lobby-leave-btn").addEventListener("click", leaveSession);
   $("copy-link-btn").addEventListener("click", () => {
     navigator.clipboard && navigator.clipboard.writeText($("invite-link").value);
-    $("copy-link-btn").textContent = "コピーしました";
-    setTimeout(() => { $("copy-link-btn").textContent = "招待リンクをコピー"; }, 1200);
+    $("copy-link-btn").textContent = "✓ コピーしました";
+    setTimeout(() => { $("copy-link-btn").textContent = "🔗 招待リンクをコピー"; }, 1200);
   });
   $("share-link-btn").addEventListener("click", () => {
     navigator.share && navigator.share({ title: "レキシオで対戦しよう", url: $("invite-link").value });
