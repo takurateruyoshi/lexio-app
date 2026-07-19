@@ -24,6 +24,15 @@ const randomToken = () =>
 
 const peerId = (code) => "lexio-webapp-" + code.toLowerCase();
 
+// 端末ごとの匿名ID（1デバイス=1アカウント。リンクを何度開いても同じ席を使い回す）
+export function deviceId() {
+  try {
+    let id = localStorage.getItem("lexio.device.v1");
+    if (!id) { id = randomToken(); localStorage.setItem("lexio.device.v1", id); }
+    return id;
+  } catch { return null; }
+}
+
 export function newPeer(id) {
   // vendor/peerjs.min.js がグローバル Peer を定義。TURN/STUN は netconfig から。
   const opts = { config: { iceServers: getIceServers() } };
@@ -47,6 +56,7 @@ export class HostSession {
     this.conns = new Map();     // seat -> DataConnection
     this.seatNames = new Map(); // seat -> name
     this.seatTokens = new Map();// seat -> 復帰用トークン
+    this.seatDevices = new Map();// seat -> 端末ID（同一端末の重複参加防止）
     this.controller = null;
     this.inGame = false;
     this.proposal = null;       // 終了提案 {from, votes:{seat:true}}
@@ -64,6 +74,7 @@ export class HostSession {
       this.hostSeat = resume.hostSeat ?? 0;
       this.seatNames = new Map(resume.seatNames);
       this.seatTokens = new Map(resume.seatTokens);
+      this.seatDevices = new Map(resume.seatDevices || []);
       this.inGame = true;
       // ホスト引き継ぎ: 自席を human に、他の human（旧ホスト）を remote に振り替える
       const snap = resume.snapshot;
@@ -83,6 +94,7 @@ export class HostSession {
       this.turnLimit = resume.turnLimit ?? 0;
       this.neo = !!resume.neo;
       this.seatTokens = new Map(resume.seatTokens || []);
+      this.seatDevices = new Map(resume.seatDevices || []);
     } else {
       this.code = randomCode();
     }
@@ -195,6 +207,7 @@ export class HostSession {
         turnLimit: this.turnLimit,
         neo: this.neo,
         seatTokens: [...this.seatTokens],
+        seatDevices: [...this.seatDevices],
       }));
     } catch {}
   }
@@ -234,11 +247,22 @@ export class HostSession {
     if (m.protocolVersion !== PROTOCOL_VERSION) {
       conn.send({ t: "error", code: "version" }); conn.close(); return;
     }
-    // 対局中の復帰（席トークン照合）
+    // 対局中の復帰（席トークン照合、または同一端末の席）
     if (this.inGame) {
-      const rj = m.rejoin;
+      let rj = m.rejoin;
+      if (!(rj && this.seatTokens.get(rj.seat) === rj.token) && m.device) {
+        // トークンが無くても同じ端末なら自分の席に戻す（リンクの開き直し等）
+        for (const [s, d] of this.seatDevices) {
+          if (d === m.device && this.controller &&
+              this.controller.seats[s] && this.controller.seats[s].kind === "remote") {
+            rj = { seat: s, token: this.seatTokens.get(s) };
+            break;
+          }
+        }
+      }
       if (rj && this.seatTokens.get(rj.seat) === rj.token) {
         const seat = rj.seat;
+        if (m.device) this.seatDevices.set(seat, m.device);
         const old = this.conns.get(seat);
         if (old && old !== conn) { try { old.close(); } catch {} }
         this.conns.set(seat, conn);
@@ -260,17 +284,28 @@ export class HostSession {
       }
       return;
     }
-    // ロビー中の復帰（席トークン一致なら同じ席へ戻す）
+    // ロビー中の復帰: 席トークン一致、または同一端末なら同じ席を使い回す
+    let back = -1;
     const lrj = m.rejoin;
     if (lrj && lrj.seat >= 1 && lrj.seat < this.tableSize &&
         this.seatTokens.get(lrj.seat) === lrj.token) {
-      const seat = lrj.seat;
+      back = lrj.seat;
+    } else if (m.device) {
+      for (const [s, d] of this.seatDevices) {
+        if (d === m.device && s >= 1) { back = s; break; }
+      }
+    }
+    if (back >= 0) {
+      const seat = back;
       const old = this.conns.get(seat);
       if (old && old !== conn) { try { old.close(); } catch {} }
+      const token = this.seatTokens.get(seat) || randomToken();
+      this.seatTokens.set(seat, token);
+      if (m.device) this.seatDevices.set(seat, m.device);
       this.conns.set(seat, conn);
       this.seatNames.set(seat, (m.name || "ゲスト").slice(0, 20));
       conn._seat = seat;
-      conn.send({ t: "welcome", seat, token: lrj.token });
+      conn.send({ t: "welcome", seat, token });
       this._broadcastLobby();
       return;
     }
@@ -284,6 +319,7 @@ export class HostSession {
     this.conns.set(seat, conn);
     this.seatNames.set(seat, (m.name || "ゲスト").slice(0, 20));
     this.seatTokens.set(seat, token);
+    if (m.device) this.seatDevices.set(seat, m.device);
     conn._seat = seat;
     conn.send({ t: "welcome", seat, token });
     this._broadcastLobby();
@@ -300,6 +336,7 @@ export class HostSession {
     } else {
       this.seatNames.delete(seat);
       this.seatTokens.delete(seat);
+      this.seatDevices.delete(seat);
       this._broadcastLobby();
     }
   }
@@ -441,6 +478,7 @@ export class HostSession {
       neo: this.neo,
       seatNames: [...this.seatNames],
       seatTokens: [...this.seatTokens],
+      seatDevices: [...this.seatDevices],
       snapshot: this.controller.snapshot(),
     };
     for (const [seat, conn] of this.conns) {
@@ -487,6 +525,7 @@ export class HostSession {
         hostSeat: this.hostSeat,
         seatNames: [...this.seatNames],
         seatTokens: [...this.seatTokens],
+        seatDevices: [...this.seatDevices],
         snapshot: this.controller.snapshot(),
       }));
     } catch {}
@@ -621,7 +660,8 @@ export class GuestSession {
         this._progress(null);
         this.attempt = 0;
         this._lastSeen = Date.now();
-        const hello = { t: "hello", name: this.name, protocolVersion: PROTOCOL_VERSION };
+        const hello = { t: "hello", name: this.name, protocolVersion: PROTOCOL_VERSION,
+                        device: deviceId() };
         if (this.token !== null) hello.rejoin = { seat: this.seat, token: this.token };
         this.conn.send(hello);
         clearInterval(this._pingTimer);

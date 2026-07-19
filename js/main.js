@@ -74,12 +74,7 @@ function renderBanner(view) {
   } else if (view && view.paused) {
     html = `⏸ ${view.pausedReason || "一時停止中"}`;
     if (session && session.mode === "host") {
-      // 戻って来られない人の席は、再招待リンク（同じ席・同じ手牌）で誰でも埋められる
-      for (const ms of session.host.missingSeats()) {
-        html += ` <button class="ghost small reinvite-btn" data-seat="${ms.seat}"
-          data-token="${ms.token}">「${ms.name}」の再招待リンクをコピー</button>`;
-      }
-      html += ` <button id="force-end" class="ghost small">対戦を終了する</button>`;
+      html += ` <button id="force-end" class="ghost small">対戦を終了</button>`;
     }
   } else if (view && view.endOffer) {
     html = `🃏 精算前に「<b>${view.endOffer.name}</b>」を使いますか？
@@ -114,12 +109,6 @@ function renderBanner(view) {
   const ey = $("endcard-yes"), en = $("endcard-no");
   if (ey) ey.addEventListener("click", () => endCardRespond(true));
   if (en) en.addEventListener("click", () => endCardRespond(false));
-  b.querySelectorAll(".reinvite-btn").forEach((btn) => btn.addEventListener("click", () => {
-    const link = `${location.origin}${location.pathname}` +
-      `?room=${session.host.code}&seat=${btn.dataset.seat}&key=${btn.dataset.token}`;
-    navigator.clipboard && navigator.clipboard.writeText(link);
-    btn.textContent = "コピーしました — 誰かに送ってください";
-  }));
   const vy = $("vote-yes"), vn = $("vote-no"), fe = $("force-end");
   if (vy) vy.addEventListener("click", () => voteEnd(true));
   if (vn) vn.addEventListener("click", () => voteEnd(false));
@@ -145,11 +134,35 @@ function saveMatchRecords(ctrl, mode) {
   setTimeout(() => flushOutbox(), 1000);
 }
 
+// 切断中の席に「🔗 再招待」チップを直接表示（ホストのみ・タップでリンクをコピー）
+function renderReinviteChips(view) {
+  if (!(session && session.mode === "host" && view && view.paused &&
+        session.host.inGame)) return;
+  for (const ms of session.host.missingSeats()) {
+    const info = document.querySelector(`.seat-info[data-seat="${ms.seat}"]`);
+    if (!info || info.querySelector(".reinvite-chip")) continue;
+    info.classList.add("disconnected");
+    const b = document.createElement("button");
+    b.className = "reinvite-chip";
+    b.textContent = "🔗 再招待";
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const link = `${location.origin}${location.pathname}` +
+        `?room=${session.host.code}&seat=${ms.seat}&key=${ms.token}`;
+      navigator.clipboard && navigator.clipboard.writeText(link);
+      b.textContent = "✓ コピー済み";
+      setTimeout(() => { b.textContent = "🔗 再招待"; }, 1800);
+    });
+    info.appendChild(b);
+  }
+}
+
 function onViewUpdate(view) {
   lastView = view;
   renderGame(view, { showHistory: showHistory() });
   renderBanner(view);
   renderNeoUI(view);
+  renderReinviteChips(view);
   $("result-again").classList.toggle("hidden", session && session.mode === "guest");
   if (session && view.matchOver && !session._recSaved) {
     const ctrl = session.ctrl || (session.host && session.host.controller);

@@ -338,6 +338,14 @@ button.choice.active{
 .kind-dot{width:7px;height:7px;border-radius:50%;display:inline-block}
 .kind-dot.ai{background:var(--accent)}
 .kind-dot.human{background:var(--gold)}
+/* 切断席の再招待チップ（ホストのみ表示・タップでリンクコピー） */
+.seat-info.disconnected .avatar{opacity:.45;filter:grayscale(.6)}
+.reinvite-chip{
+  margin-top:5px;padding:5px 12px;font-size:11px;font-weight:800;border-radius:14px;
+  background:linear-gradient(175deg,#f2d488,var(--gold) 45%,var(--gold2));
+  color:#3a2a06;box-shadow:0 3px 10px rgba(0,0,0,.5);
+  animation:pulse 1.6s ease-in-out infinite;
+}
 .seat.turn .avatar{
   border-color:var(--gold);
   box-shadow:0 0 0 2px rgba(233,196,106,.5),0 0 26px rgba(233,196,106,.5);
