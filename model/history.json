@@ -1,0 +1,22 @@
+[
+  {
+    "at": "2026-07-19T12:51:39.086Z",
+    "kind": "evolve",
+    "champion": "champion",
+    "arena": {
+      "champion": 0.41,
+      "selfplay": -0.277,
+      "human": -0.27
+    },
+    "arenaGames": 300,
+    "imitPoints": 37,
+    "imitOn": false,
+    "imitRate": null,
+    "records": 6,
+    "gens": {
+      "selfplay": 1,
+      "human": 1
+    },
+    "gamesPlayed": 588
+  }
+]
