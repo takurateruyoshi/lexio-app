@@ -810,7 +810,11 @@ button.hint-glow{
   .turn-timer{font-size:22px;min-width:28px}
   .action-msg{bottom:calc(var(--hand-area,150px) + 60px);max-width:92%}
   .my-info{left:8px;bottom:calc(var(--hand-area,150px) + 64px)}
-  .my-hand{padding:10px 4px calc(6px + env(safe-area-inset-bottom));gap:2px}
+  /* 手牌は常に1行: 枚数に応じてJSが --hand-w を設定（最大40px） */
+  .my-hand{padding:10px 4px calc(6px + env(safe-area-inset-bottom));gap:2px;flex-wrap:nowrap}
+  .my-hand .tile{--w:var(--hand-w,min(40px,7vw));--h:calc(var(--w)*1.4)}
+  .my-hand .tile .num{font-size:calc(var(--w)*.45)}
+  .my-hand .tile .gly{font-size:calc(var(--w)*.25)}
 
   /* Neoカード: 常に右下スタック（JSが.stackを強制） */
   .my-cards,.my-cards.stack{right:8px;bottom:calc(var(--hand-area,150px) + 70px);padding-left:0}

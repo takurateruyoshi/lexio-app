@@ -664,9 +664,17 @@ function positionCardFan() {
   const tiles = document.querySelectorAll("#my-hand .tile");
   const stage = $("game-stage");
   if (PORTRAIT_MQ.matches) {
-    // 手牌は枚数で1〜2段に変わるため、実測高さで卓とボタンの位置を追従させる
+    // 手牌は常に1行: 枚数に応じて牌幅を縮小（最大40px・最小20px）
+    const hand = $("my-hand");
+    const n = hand.querySelectorAll(".tile").length;
+    if (n) {
+      const avail = window.innerWidth - 12;
+      const w = Math.max(20, Math.min(40, Math.floor((avail - (n - 1) * 2) / n)));
+      hand.style.setProperty("--hand-w", `${w}px`);
+    }
+    // 実測高さで卓とボタンの位置を追従させる
     // （画面非表示中は0になるので既定値のまま次の描画で追従）
-    const h = $("my-hand").offsetHeight;
+    const h = hand.offsetHeight;
     if (h > 0) stage.style.setProperty("--hand-area", `${Math.max(120, h + 12)}px`);
     if (wrap.childElementCount) {
       wrap.classList.add("stack");
