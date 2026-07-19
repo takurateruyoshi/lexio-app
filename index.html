@@ -103,19 +103,16 @@
       <h1 class="stage-title">対戦ロビー</h1>
       <div id="lobby-seats" class="table3d"></div>
       <div class="lobby-center">
-        <div class="lobby-code-badge">部屋コード <b id="room-code">-----</b>
-          <button id="copy-code-btn" class="ghost small">コピー</button></div>
-        <div class="lobby-invite">
-          <input id="invite-link" type="text" readonly>
-          <button id="copy-link-btn" class="ghost small">リンクをコピー</button>
-          <button id="share-link-btn" class="ghost small hidden">共有</button>
+        <div class="lobby-code-badge">部屋コード <b id="room-code">-----</b></div>
+        <div class="lobby-actions">
+          <button id="copy-link-btn" class="ghost">招待リンクをコピー</button>
+          <button id="share-link-btn" class="ghost hidden">共有</button>
         </div>
         <p class="hint" id="lobby-status"></p>
+        <input id="invite-link" type="text" readonly class="hidden">
       </div>
       <div class="lobby-bottom">
-        <label class="lobby-name">名前
-          <input id="player-name" type="text" value="あなた" maxlength="20">
-        </label>
+        <button id="name-btn" class="ghost small">✎ あなた</button>
       </div>
       <button id="lobby-leave-btn" class="stage-back">◀ 退出</button>
       <button id="start-room-btn" class="stage-ok">開始する ▶</button>
@@ -173,6 +170,20 @@
       <button id="result-chip" class="result-chip hidden">結果を表示</button>
     </div>
   </section>
+
+  <!-- 名前の変更（ロビー） -->
+  <div id="name-overlay" class="overlay hidden">
+    <div class="result-card join-card">
+      <button class="modal-x" id="name-x">✕</button>
+      <h2>名前を変更</h2>
+      <div class="setup-row center">
+        <input id="name-input" type="text" maxlength="20" placeholder="あなた">
+      </div>
+      <div class="setup-row center">
+        <button id="name-save" class="primary">決定</button>
+      </div>
+    </div>
+  </div>
 
   <!-- リンク/コード参加（名前入力） -->
   <div id="join-overlay" class="overlay hidden">

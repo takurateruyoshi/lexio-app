@@ -341,7 +341,7 @@ function createRoom() {
 function resumeHost(resume) {
   session = { mode: "host" };
   session.host = new HostSession(null, 0, 0, hostCallbacks(), resume);
-  showScreen("game");
+  if (!resume.lobby) showScreen("game");   // ロビー復帰は onReady がロビーを表示する
 }
 
 // ============================== ルーム（ゲスト） ==============================
@@ -364,7 +364,18 @@ function guestCallbacks() {
       }
       rerender();
     },
-    onLobby: (seats) => renderLobby(seats),
+    onLobby: (seats) => {
+      // ロビー復帰（リロード/ホスト復帰後）: ロビー画面に戻す
+      if ($("screen-lobby").classList.contains("hidden")) {
+        showScreen("lobby");
+        $("room-code").textContent = session.guest.code;
+        $("invite-link").value = `${location.origin}${location.pathname}?room=${session.guest.code}`;
+        $("start-room-btn").classList.add("hidden");
+      }
+      reconnecting = null;
+      renderLobby(seats);
+      $("lobby-status").textContent = "ホストの開始を待っています…";
+    },
     onStart: () => showScreen("game"),
     onState: (view) => {
       reconnecting = null;
@@ -380,6 +391,13 @@ function guestCallbacks() {
     },
     onReconnecting: (attempt) => {
       reconnecting = attempt;
+      if (session && session.guest && !session.guest.started) {
+        // ロビー段階の切断はロビーに留まり、ホストの復帰を待つ
+        if (!$("screen-lobby").classList.contains("hidden")) {
+          $("lobby-status").textContent = `接続が切れました — ホストの復帰を待っています… (${attempt})`;
+          return;
+        }
+      }
       if ($("screen-game").classList.contains("hidden")) showScreen("game");
       renderBanner(lastView);
     },
@@ -681,7 +699,7 @@ function positionCardFan() {
     // 実測高さで卓とボタンの位置を追従させる
     // （画面非表示中は0になるので既定値のまま次の描画で追従）
     const h = hand.offsetHeight;
-    if (h > 0) stage.style.setProperty("--hand-area", `${Math.max(96, h + 2)}px`);
+    if (h > 0) stage.style.setProperty("--hand-area", `${Math.max(48, h + 2)}px`);
     if (wrap.childElementCount) {
       wrap.classList.add("stack");
       wrap.style.left = ""; wrap.style.right = ""; wrap.style.bottom = "";
@@ -873,26 +891,34 @@ window.addEventListener("DOMContentLoaded", () => {
   $("setup-back-btn").addEventListener("click", () => showScreen("title"));
 
   // ロビー
-  $("player-name").value = storedName();
-  $("player-name").addEventListener("change", () => {
-    const n = ($("player-name").value.trim() || "あなた");
-    saveName(n);
-    if (session && session.host) session.host.setName(n);
+  const updateNameBtn = () => { $("name-btn").textContent = `✎ ${storedName()}`; };
+  updateNameBtn();
+  // 名前変更はモーダルで行う（インライン入力はキーボードでレイアウトが崩れるため）
+  $("name-btn").addEventListener("click", () => {
+    $("name-input").value = storedName();
+    $("name-overlay").classList.remove("hidden");
+    $("name-input").focus();
   });
+  $("name-x").addEventListener("click", () => $("name-overlay").classList.add("hidden"));
+  const saveNameFromModal = () => {
+    const n = ($("name-input").value.trim() || "あなた").slice(0, 20);
+    saveName(n);
+    updateNameBtn();
+    if (session && session.host) session.host.setName(n);
+    if (session && session.guest) session.guest.rename(n);
+    $("name-overlay").classList.add("hidden");
+  };
+  $("name-save").addEventListener("click", saveNameFromModal);
+  $("name-input").addEventListener("keydown", (e) => { if (e.key === "Enter") saveNameFromModal(); });
   $("start-room-btn").addEventListener("click", () => session && session.host && session.host.startGame());
   $("lobby-leave-btn").addEventListener("click", leaveSession);
   $("copy-link-btn").addEventListener("click", () => {
     navigator.clipboard && navigator.clipboard.writeText($("invite-link").value);
     $("copy-link-btn").textContent = "コピーしました";
-    setTimeout(() => { $("copy-link-btn").textContent = "リンクをコピー"; }, 1200);
+    setTimeout(() => { $("copy-link-btn").textContent = "招待リンクをコピー"; }, 1200);
   });
   $("share-link-btn").addEventListener("click", () => {
     navigator.share && navigator.share({ title: "レキシオで対戦しよう", url: $("invite-link").value });
-  });
-  $("copy-code-btn").addEventListener("click", () => {
-    navigator.clipboard && navigator.clipboard.writeText($("room-code").textContent);
-    $("copy-code-btn").textContent = "コピーしました";
-    setTimeout(() => { $("copy-code-btn").textContent = "コードをコピー"; }, 1200);
   });
 
   // ゲーム内

@@ -265,16 +265,12 @@ button.choice.active{
   position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);z-index:15;
   display:flex;flex-direction:column;align-items:center;gap:8px;width:min(480px,86%);
 }
-.lobby-invite{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;width:100%;
-  background:rgba(0,0,0,.45);padding:10px 12px;border-radius:3px;
-  clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)}
-.lobby-invite input{flex:1;min-width:180px;font-size:11px;color:var(--muted)}
+.lobby-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+#name-input{width:min(280px,80vw);text-align:center;font-size:16px}
 .lobby-bottom{
   position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:20;
   display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;
 }
-.lobby-name{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
-.lobby-name input{width:130px}
 .seat.invitable{cursor:pointer}
 .seat.invitable:hover .avatar{border-color:var(--gold);
   box-shadow:0 0 0 2px rgba(233,196,106,.45),0 0 24px rgba(233,196,106,.45)}
@@ -808,7 +804,7 @@ button.hint-glow{
 
 /* ============ スマホ縦画面: 相手席を上列に再配置 ============ */
 @media (orientation:portrait) and (max-width:600px){
-  #game-stage{--hand-area:150px}
+  #game-stage{--hand-area:112px}
   .tile{--w:40px;--h:56px}
   .tile .num{font-size:18px}
   .tile .gly{font-size:10px}
@@ -849,7 +845,7 @@ button.hint-glow{
   .action-msg{bottom:calc(var(--hand-area,150px) + 52px);max-width:92%}
   .my-info{left:8px;bottom:calc(var(--hand-area,150px) + 54px)}
   /* 手牌は常に1行: 枚数に応じてJSが --hand-w を設定（最大40px） */
-  .my-hand{padding:10px 4px calc(6px + env(safe-area-inset-bottom));gap:2px;flex-wrap:nowrap}
+  .my-hand{padding:4px 4px calc(6px + env(safe-area-inset-bottom));gap:2px;flex-wrap:nowrap}
   .my-hand .tile{--w:var(--hand-w,min(40px,7vw));--h:calc(var(--w)*1.4)}
   .my-hand .tile .num{font-size:calc(var(--w)*.45)}
   .my-hand .tile .gly{font-size:calc(var(--w)*.25)}

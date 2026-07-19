@@ -49,8 +49,9 @@ export class HostSession {
     this.controller = null;
     this.inGame = false;
     this.proposal = null;       // 終了提案 {from, votes:{seat:true}}
-    this.resuming = !!resume;
-    if (resume) {
+    this.resuming = !!(resume && resume.snapshot);
+    this.keepCode = !!resume;    // 復帰時は同じ部屋コードを取り直す
+    if (resume && resume.snapshot) {
       this.code = resume.code;
       this.hostName = resume.hostName;
       this.tableSize = resume.tableSize;
@@ -62,10 +63,30 @@ export class HostSession {
       this.seatTokens = new Map(resume.seatTokens);
       this.inGame = true;
       this.controller = GameController.restore(resume.snapshot, () => this._pushStates());
+    } else if (resume && resume.lobby) {
+      // ロビー段階の復帰: 同じ部屋コードで開き直す。
+      // 席はクリアし、ゲスト側の自動再接続（席トークン付き）で取り直す。
+      this.code = resume.code;
+      this.hostName = resume.hostName;
+      this.tableSize = resume.tableSize;
+      this.rounds = resume.rounds;
+      this.openSeats = resume.openSeats ?? this.tableSize - 1;
+      this.turnLimit = resume.turnLimit ?? 0;
+      this.neo = !!resume.neo;
+      this.seatTokens = new Map(resume.seatTokens || []);
     } else {
       this.code = randomCode();
     }
     this._openPeer();
+    // アプリ切替などでページが再表示された時、シグナリングが切れていれば繋ぎ直す
+    this._visHandler = () => {
+      if (document.visibilityState !== "visible" || this._destroyed) return;
+      if (!this.peer || this.peer.destroyed) this._openPeer();
+      else if (this.peer.disconnected) {
+        try { this.peer.reconnect(); } catch { this._openPeer(); }
+      }
+    };
+    document.addEventListener("visibilitychange", this._visHandler);
   }
 
   setName(name) {
@@ -78,11 +99,15 @@ export class HostSession {
       const raw = sessionStorage.getItem(STORE_HOST);
       if (!raw) return null;
       const d = JSON.parse(raw);
-      return d && d.snapshot && d.snapshot.v === 1 ? d : null;
+      if (!d) return null;
+      if (d.snapshot && d.snapshot.v === 1) return d;
+      if (d.lobby) return d;
+      return null;
     } catch { return null; }
   }
 
   _openPeer(retries = 3) {
+    try { this.peer && this.peer.destroy(); } catch {}
     this.peer = newPeer(peerId(this.code));
     this.peer.on("open", () => {
       this.cb.onReady(this.code);
@@ -96,7 +121,7 @@ export class HostSession {
     });
     this.peer.on("error", (e) => {
       if (e.type === "unavailable-id") {
-        if (this.resuming) {
+        if (this.keepCode) {
           // 旧IDの解放待ち（PeerServer側のTTL）
           if (retries > 0) setTimeout(() => this._openPeer(retries - 1), 3000);
           else this.cb.onError("部屋IDの再取得に失敗しました（時間をおいて再試行してください）");
@@ -129,6 +154,25 @@ export class HostSession {
     const msg = { t: "lobby", seats: this._lobbySeats() };
     for (const conn of this.conns.values()) conn.send(msg);
     this.cb.onLobby(this._lobbySeats());
+    this._persistLobby();
+  }
+
+  // ロビー段階でもホストのリロード/復帰で部屋を維持できるように保存
+  _persistLobby() {
+    if (this.inGame) return;
+    try {
+      sessionStorage.setItem(STORE_HOST, JSON.stringify({
+        lobby: true,
+        code: this.code,
+        hostName: this.hostName,
+        tableSize: this.tableSize,
+        rounds: this.rounds,
+        openSeats: this.openSeats,
+        turnLimit: this.turnLimit,
+        neo: this.neo,
+        seatTokens: [...this.seatTokens],
+      }));
+    } catch {}
   }
 
   _onConnection(conn) {
@@ -148,6 +192,9 @@ export class HostSession {
         this.proposeEnd(conn._seat);
       } else if (m.t === "endVote" && conn._seat !== undefined) {
         this.vote(conn._seat, !!m.agree);
+      } else if (m.t === "rename" && conn._seat !== undefined && !this.inGame) {
+        this.seatNames.set(conn._seat, String(m.name || "ゲスト").slice(0, 20));
+        this._broadcastLobby();
       } else if (m.t === "ping") {
         conn.send({ t: "pong" });
       }
@@ -179,6 +226,20 @@ export class HostSession {
       } else {
         conn.send({ t: "error", code: "in_progress" }); conn.close();
       }
+      return;
+    }
+    // ロビー中の復帰（席トークン一致なら同じ席へ戻す）
+    const lrj = m.rejoin;
+    if (lrj && lrj.seat >= 1 && lrj.seat < this.tableSize &&
+        this.seatTokens.get(lrj.seat) === lrj.token) {
+      const seat = lrj.seat;
+      const old = this.conns.get(seat);
+      if (old && old !== conn) { try { old.close(); } catch {} }
+      this.conns.set(seat, conn);
+      this.seatNames.set(seat, (m.name || "ゲスト").slice(0, 20));
+      conn._seat = seat;
+      conn.send({ t: "welcome", seat, token: lrj.token });
+      this._broadcastLobby();
       return;
     }
     // ロビー参加（募集席のみ）
@@ -364,6 +425,8 @@ export class HostSession {
   hostVote(agree) { this.vote(0, agree); }
 
   destroy() {
+    this._destroyed = true;
+    document.removeEventListener("visibilitychange", this._visHandler);
     try { sessionStorage.removeItem(STORE_HOST); } catch {}
     try { this.peer && this.peer.destroy(); } catch {}
     this.conns.clear();
@@ -383,10 +446,20 @@ export class GuestSession {
     this.cb = cb;
     this.seat = rejoin ? rejoin.seat : -1;
     this.token = rejoin ? rejoin.token : null;
-    this.started = !!rejoin;     // 対局開始済みか（切断時にリトライするか）
+    this.started = !!rejoin;     // 対局開始済みか（ロビー到着で false に戻る）
+    this.joined = !!rejoin;      // 一度でも入室したか（切断時にリトライするか）
     this.stopped = false;
     this.attempt = 0;
     this._connect();
+    // ページ再表示時は待たずに即再接続
+    this._visHandler = () => {
+      if (document.visibilityState === "visible" && !this.stopped &&
+          !this.alive && this.joined) {
+        clearTimeout(this._retryTimer);
+        this._connect();
+      }
+    };
+    document.addEventListener("visibilitychange", this._visHandler);
   }
 
   static loadResume() {
@@ -403,7 +476,7 @@ export class GuestSession {
   _fail(msg) {
     clearTimeout(this._connTimer);
     if (this.stopped) return;
-    if (this.started) { this._scheduleRetry(); return; }
+    if (this.started || this.joined) { this._scheduleRetry(); return; }
     this.cb.onError(msg);
     try { this.peer && this.peer.destroy(); } catch {}
   }
@@ -429,7 +502,7 @@ export class GuestSession {
 
     this.peer.on("error", (e) => {
       if (this.stopped) return;
-      if (this.started) { this._scheduleRetry(); return; }
+      if (this.started || this.joined) { this._scheduleRetry(); return; }
       if (e.type === "peer-unavailable") {
         this._fail("その部屋は見つかりません（コードの誤り、またはホストが部屋を閉じました）");
       } else if (["network", "server-error", "socket-error", "socket-closed"].includes(e.type)) {
@@ -475,7 +548,7 @@ export class GuestSession {
         if (this.stopped || !this.alive) return;
         this.alive = false;
         clearInterval(this._pingTimer);
-        if (this.started) this._scheduleRetry();
+        if (this.started || this.joined) this._scheduleRetry();
         else this.cb.onHostLost();
       };
       this.conn.on("close", lost);
@@ -498,6 +571,7 @@ export class GuestSession {
       case "welcome":
         this.seat = m.seat;
         this.token = m.token;
+        this.joined = true;
         this.cb.onJoined({ seat: m.seat, token: m.token, code: this.code });
         break;
       case "error": {
@@ -507,12 +581,18 @@ export class GuestSession {
         else this.cb.onError(msgs[m.code] || m.code);
         break;
       }
-      case "lobby": this.cb.onLobby(m.seats); break;
+      case "lobby": this.started = false; this.cb.onLobby(m.seats); break;
       case "start": this.started = true; this.cb.onStart(); break;
       case "state": this.started = true; this.cb.onState(m.view); break;
       case "reject": this.cb.onReject(m.reason); break;
       case "pong": break;
     }
+  }
+
+  // ロビー中の名前変更（ホストが全員に再配信する）
+  rename(name) {
+    this.name = (name || "ゲスト").slice(0, 20);
+    try { this.conn.send({ t: "rename", name: this.name }); } catch {}
   }
 
   play(tiles) { try { this.conn.send({ t: "action", kind: "play", tiles }); } catch {} return null; }
@@ -525,6 +605,7 @@ export class GuestSession {
 
   destroy() {
     this.stopped = true;
+    document.removeEventListener("visibilitychange", this._visHandler);
     clearInterval(this._pingTimer);
     clearTimeout(this._retryTimer);
     clearTimeout(this._connTimer);
