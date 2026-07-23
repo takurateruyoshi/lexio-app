@@ -881,11 +881,14 @@ button.hint-glow{
   .turn-timer{font-size:22px;min-width:28px}
   .action-msg{bottom:calc(var(--hand-area,150px) + 52px);max-width:92%}
   .my-info{left:8px;bottom:calc(var(--hand-area,150px) + 54px)}
-  /* 手牌は常に1行・牌サイズは固定40px — 枚数が多い時はトランプのように重ねる */
+  /* 手牌は常に1行・小さめの固定サイズ（最大13枚が重ならず収まる） */
   .my-hand{padding:4px 4px calc(6px + env(safe-area-inset-bottom));gap:0;flex-wrap:nowrap}
-  .my-hand .tile{margin-left:var(--hand-ml,2px)}
+  .my-hand .tile{--w:26px;--h:37px;margin-left:var(--hand-ml,2px)}
+  .my-hand .tile .num{font-size:12px}
+  .my-hand .tile .gly{font-size:7px;margin-top:1px}
   .my-hand .tile:first-child{margin-left:0}
   .my-hand .tile.selected,.my-hand .tile:hover{z-index:2}
+  .my-hand .tile.selected{transform:translateY(-10px)}
 
   /* Neoカード: 常に右下スタック（JSが.stackを強制） */
   .my-cards,.my-cards.stack{right:8px;bottom:calc(var(--hand-area,150px) + 60px);padding-left:0}

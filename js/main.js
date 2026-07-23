@@ -729,12 +729,12 @@ function positionCardFan() {
   const tiles = document.querySelectorAll("#my-hand .tile");
   const stage = $("game-stage");
   if (PORTRAIT_MQ.matches) {
-    // 手牌は常に1行・牌は固定40px: 収まらない分は重ねて表示（サイズは変えない）
+    // 手牌は常に1行・固定26px: 13枚までは重ならない。それ以上だけ僅かに重ねる
     const hand = $("my-hand");
     const n = hand.querySelectorAll(".tile").length;
     if (n) {
       const avail = window.innerWidth - 12;
-      const TILE = 40;
+      const TILE = 26;
       const stride = n > 1 ? Math.min(TILE + 2, (avail - TILE) / (n - 1)) : TILE;
       hand.style.setProperty("--hand-ml", `${Math.floor(stride - TILE)}px`);
     }
