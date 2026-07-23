@@ -881,16 +881,35 @@ button.hint-glow{
   .turn-timer{font-size:22px;min-width:28px}
   .action-msg{bottom:calc(var(--hand-area,150px) + 52px);max-width:92%}
   .my-info{left:8px;bottom:calc(var(--hand-area,150px) + 54px)}
-  /* 手牌は常に1行・32px基準（13枚時は数字が隠れない程度に僅かに重ねる）。
-     幅はvw上限でどの端末でも必ず画面内に収まる */
+  /* 手牌は常に1行・重ねない（雀魂式: 牌をぴったり並べ、縁と厚みのデザインで区切る）。
+     幅は「13枚がちょうど収まる」サイズに自動調整 */
   .my-hand{padding:4px 4px calc(6px + env(safe-area-inset-bottom));gap:0;flex-wrap:nowrap}
   .my-hand .tile{
-    --w:min(32px, 8.5vw);
-    --h:calc(var(--w) * 1.42);
-    margin-left:var(--hand-ml,-4px);
+    --w:min(34px, calc((100vw - 14px) / 13));
+    --h:calc(var(--w) * 1.44);
+    margin-left:var(--hand-ml,0px);
+    border-radius:4px;
+    /* 隣と接しても1枚ずつ見えるよう: 細い縁 + 上面ハイライト + 下面の厚み */
+    box-shadow:
+      0 0 0 1px rgba(70,60,42,.55),
+      inset 0 1px 1px rgba(255,255,255,.95),
+      inset 0 -3px 0 rgba(150,138,105,.4),
+      0 3px 0 var(--tile-side),
+      0 5px 4px rgba(0,0,0,.5);
   }
-  .my-hand .tile .num{font-size:calc(var(--w) * .47)}
-  .my-hand .tile .gly{font-size:calc(var(--w) * .27);margin-top:1px}
+  .my-hand .tile::after{border-radius:4px}
+  .my-hand .tile .num{font-size:calc(var(--w) * .5)}
+  .my-hand .tile .gly{font-size:calc(var(--w) * .28);margin-top:1px}
+  .my-hand .tile.selected{
+    box-shadow:
+      0 0 0 1px rgba(70,60,42,.55),
+      inset 0 1px 1px rgba(255,255,255,.95),
+      inset 0 -3px 0 rgba(150,138,105,.4),
+      0 3px 0 var(--tile-side),
+      0 0 0 2px var(--gold),
+      0 0 14px rgba(233,196,106,.6),
+      0 5px 4px rgba(0,0,0,.5);
+  }
   .my-hand.your-turn{filter:drop-shadow(0 -2px 12px rgba(233,196,106,.32))}
   .my-hand .tile:first-child{margin-left:0}
   .my-hand .tile.selected,.my-hand .tile:hover{z-index:2}
