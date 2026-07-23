@@ -881,16 +881,17 @@ button.hint-glow{
   .turn-timer{font-size:22px;min-width:28px}
   .action-msg{bottom:calc(var(--hand-area,150px) + 52px);max-width:92%}
   .my-info{left:8px;bottom:calc(var(--hand-area,150px) + 54px)}
-  /* 手牌は常に1行・小さめの固定サイズ。CSSだけで「13枚が必ず画面内に収まる」
-     上限を保証する（JSに依存せず、狭い端末では自動でさらに小さくなる） */
+  /* 手牌は常に1行・32px基準（13枚時は数字が隠れない程度に僅かに重ねる）。
+     幅はvw上限でどの端末でも必ず画面内に収まる */
   .my-hand{padding:4px 4px calc(6px + env(safe-area-inset-bottom));gap:0;flex-wrap:nowrap}
   .my-hand .tile{
-    --w:min(26px, calc((100vw - 36px) / 13));
+    --w:min(32px, 8.5vw);
     --h:calc(var(--w) * 1.42);
-    margin-left:var(--hand-ml,2px);
+    margin-left:var(--hand-ml,-4px);
   }
-  .my-hand .tile .num{font-size:calc(var(--w) * .46)}
+  .my-hand .tile .num{font-size:calc(var(--w) * .47)}
   .my-hand .tile .gly{font-size:calc(var(--w) * .27);margin-top:1px}
+  .my-hand.your-turn{filter:drop-shadow(0 -2px 12px rgba(233,196,106,.32))}
   .my-hand .tile:first-child{margin-left:0}
   .my-hand .tile.selected,.my-hand .tile:hover{z-index:2}
   .my-hand .tile.selected{transform:translateY(-10px)}
