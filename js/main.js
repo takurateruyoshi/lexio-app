@@ -729,14 +729,15 @@ function positionCardFan() {
   const tiles = document.querySelectorAll("#my-hand .tile");
   const stage = $("game-stage");
   if (PORTRAIT_MQ.matches) {
-    // 手牌は常に1行・固定26px: 13枚までは重ならない。それ以上だけ僅かに重ねる
+    // 手牌は常に1行: 13枚まではCSSの上限幅で必ず収まる。
+    // 14枚以上（Neoのギフト等）だけ、実際の牌幅から重なりを計算する
     const hand = $("my-hand");
     const n = hand.querySelectorAll(".tile").length;
     if (n) {
       const avail = window.innerWidth - 12;
-      const TILE = 26;
-      const stride = n > 1 ? Math.min(TILE + 2, (avail - TILE) / (n - 1)) : TILE;
-      hand.style.setProperty("--hand-ml", `${Math.floor(stride - TILE)}px`);
+      const tw = hand.querySelector(".tile").getBoundingClientRect().width || 26;
+      const stride = n > 1 ? Math.min(tw + 2, (avail - tw) / (n - 1)) : tw;
+      hand.style.setProperty("--hand-ml", `${Math.floor(stride - tw)}px`);
     }
     // 実測高さで卓とボタンの位置を追従させる
     // （画面非表示中は0になるので既定値のまま次の描画で追従）
