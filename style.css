@@ -889,26 +889,24 @@ button.hint-glow{
     --h:calc(var(--w) * 1.44);
     margin-left:var(--hand-ml,0px);
     border-radius:4px;
-    /* 隣と接しても1枚ずつ見えるよう: 細い縁 + 上面ハイライト + 下面の厚み */
+    /* 外影・縁取りなし: 連続した一枚板に、左右の面取りの陰影だけで継ぎ目を出す */
     box-shadow:
-      0 0 0 1px rgba(70,60,42,.55),
       inset 0 1px 1px rgba(255,255,255,.95),
-      inset 0 -3px 0 rgba(150,138,105,.4),
-      0 3px 0 var(--tile-side),
-      0 5px 4px rgba(0,0,0,.5);
+      inset 1px 0 0 rgba(255,255,255,.55),
+      inset -1px 0 1px rgba(150,138,105,.5),
+      inset 0 -2px 2px rgba(150,138,105,.45);
   }
   .my-hand .tile::after{border-radius:4px}
   .my-hand .tile .num{font-size:calc(var(--w) * .5)}
   .my-hand .tile .gly{font-size:calc(var(--w) * .28);margin-top:1px}
   .my-hand .tile.selected{
     box-shadow:
-      0 0 0 1px rgba(70,60,42,.55),
       inset 0 1px 1px rgba(255,255,255,.95),
-      inset 0 -3px 0 rgba(150,138,105,.4),
-      0 3px 0 var(--tile-side),
+      inset 1px 0 0 rgba(255,255,255,.55),
+      inset -1px 0 1px rgba(150,138,105,.5),
+      inset 0 -2px 2px rgba(150,138,105,.45),
       0 0 0 2px var(--gold),
-      0 0 14px rgba(233,196,106,.6),
-      0 5px 4px rgba(0,0,0,.5);
+      0 0 14px rgba(233,196,106,.6);
   }
   .my-hand.your-turn{filter:drop-shadow(0 -2px 12px rgba(233,196,106,.32))}
   .my-hand .tile:first-child{margin-left:0}
