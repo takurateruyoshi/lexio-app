@@ -778,5 +778,25 @@
       "human": 2
     },
     "gamesPlayed": 1164
+  },
+  {
+    "at": "2026-07-29T02:58:16.092Z",
+    "kind": "evolve",
+    "champion": "selfplay",
+    "arena": {
+      "champion": 0.055,
+      "selfplay": 0.623,
+      "human": -0.697
+    },
+    "arenaGames": 300,
+    "imitPoints": 235,
+    "imitOn": true,
+    "imitRate": 0.675,
+    "records": 37,
+    "gens": {
+      "selfplay": 3,
+      "human": 3
+    },
+    "gamesPlayed": 1164
   }
 ]
