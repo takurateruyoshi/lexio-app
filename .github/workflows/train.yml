@@ -41,6 +41,8 @@ jobs:
           fi
       - name: Two-lineage training + arena
         run: node tools/train_evolve.mjs --minutes ${{ github.event.inputs.minutes || 20 }} --records games
+      - name: Build ranking
+        run: node tools/build_ranking.mjs --records games --out model/ranking.json
       - name: Commit updated weights
         run: |
           if [ -n "$(git status --porcelain model/)" ]; then

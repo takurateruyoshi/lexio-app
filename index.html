@@ -26,6 +26,7 @@
     </div>
     <div class="title-sub">
       <button id="tutorial-btn" class="ghost">📖 チュートリアル</button>
+      <button id="rank-btn" class="ghost">🏆 ランキング</button>
       <span class="join-group">
         <input id="join-code" type="text" placeholder="部屋コード" maxlength="6">
         <button id="join-room-btn" class="ghost">参加</button>
@@ -182,6 +183,17 @@
       <div class="setup-row center">
         <button id="name-save" class="primary">決定</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ランキング -->
+  <div id="rank-overlay" class="overlay hidden">
+    <div class="result-card join-card">
+      <button class="modal-x" id="rank-x">✕</button>
+      <h2>🏆 ランキング</h2>
+      <p class="lead" id="rank-me"></p>
+      <ol id="rank-list" class="rank-list"></ol>
+      <p class="hint" id="rank-updated"></p>
     </div>
   </div>
 

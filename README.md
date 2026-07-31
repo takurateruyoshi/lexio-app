@@ -59,6 +59,9 @@
 
 - 対局終了時、匿名化した牌譜（名前は席番号に置換）が送信キューに入り、
   `model/collect.json` の設定に従って送信されます（フッタのトグルでオプトアウト可）。
+  ランキング集計のため、人間席には端末IDの短いハッシュと表示名（ニックネーム）が
+  `players` として付与されます（学習ワークフローが `model/ranking.json` に
+  端末ごとのベストスコアを集計し、アプリの🏆ランキングに表示。オプトアウトで無効）。
   1. `httpUrl` が設定されていれば gzip バッチPOST（Cloudflare Worker 等。雛形と手順は
      `tools/cloudflare/README.md`）
   2. 未設定/失敗時は **P2P収集ピア**へ: [collector.html](collector.html) が

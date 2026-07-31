@@ -2,7 +2,8 @@
 // フロー: タイトル(続きから/対戦) → 対戦設定(人数・AI席数・ラウンド) → 部屋/ソロ/観戦
 "use strict";
 import { GameController } from "./game.js";
-import { HostSession, GuestSession, STORE_GUEST } from "./net.js";
+import { HostSession, GuestSession, STORE_GUEST, deviceId } from "./net.js";
+import { devHash, getLocalBest, recordScore } from "./rank.js";
 import { $, renderGame, setActionMessage, selectedTiles, clearSelection, showScreen, buildRulesContent, showPrevResult, renderLobbyTable } from "./ui.js";
 import { CARD_DEFS, jokerPlayOptions } from "./cards.js";
 import { loadModel, getTheta } from "./model.js";
@@ -115,17 +116,36 @@ function renderBanner(view) {
   if (fe) fe.addEventListener("click", () => session && session.host && session.host.forceEnd());
 }
 
+// 席ごとの公開識別子（人間席のみ端末ハッシュ+表示名。AI席は null）— ランキング集計用
+function playersMeta(ctrl) {
+  const devs = session && session.host ? session.host.seatDevices : null;
+  return ctrl.seats.map((s, i) => {
+    if (s.kind === "human") return { d: devHash(deviceId()), n: s.name };
+    if (s.kind === "remote") {
+      const dv = devs && devs.get ? devs.get(i) : null;
+      return { d: dv ? devHash(dv) : null, n: s.name };
+    }
+    return null;
+  });
+}
+
 // 完了したマッチの牌譜を保存 + 研究用送信キューへ
 function saveMatchRecords(ctrl, mode) {
   const th = getTheta();
+  const players = playersMeta(ctrl);
+  const me = ctrl.seats.findIndex((s) => s.kind === "human");
   for (const rec of ctrl.records) {
     try { annotateBlocking(rec); } catch {}
+    if (mode !== "practice" && me >= 0 && rec.scores) {
+      recordScore(rec.scores[me], ctrl.seats[me].name);
+    }
     const full = {
       mode,
       at: new Date().toISOString(),
       model: { gen: th.gen, games: th.games },
       numPlayers: ctrl.cfg.numPlayers,
       totalRounds: ctrl.totalRounds,
+      players,
       ...rec,
     };
     saveGameRecord(full);
@@ -173,6 +193,16 @@ function onViewUpdate(view) {
       if (view.matchOver || session.practice) localStorage.removeItem(STORE_SOLO);
       else localStorage.setItem(STORE_SOLO, JSON.stringify(session.ctrl.snapshot()));
     } catch {}
+  }
+  if (session && session.mode === "guest" && view.terminal && view.scores) {
+    // ゲスト側のベストスコア記録（ラウンドごとに1回だけ）
+    session._scoredRounds = session._scoredRounds || {};
+    const rkey = "r" + view.round;
+    if (!session._scoredRounds[rkey]) {
+      session._scoredRounds[rkey] = true;
+      const e = session.guest ? view.scores[session.guest.seat] : null;
+      if (e) recordScore(e.score, e.name);
+    }
   }
   if (session && session.mode === "guest" && view.matchOver) {
     try { sessionStorage.removeItem(STORE_GUEST); } catch {}
@@ -956,6 +986,50 @@ window.addEventListener("DOMContentLoaded", () => {
   };
   $("name-save").addEventListener("click", saveNameFromModal);
   $("name-input").addEventListener("keydown", (e) => { if (e.key === "Enter") saveNameFromModal(); });
+
+  // ランキング（自分のベスト + 全端末ランキング）
+  const fmtScore = (v) => (v > 0 ? "+" + v : String(v)) + "点";
+  const showRanking = async () => {
+    $("rank-overlay").classList.remove("hidden");
+    const best = getLocalBest();
+    $("rank-me").textContent = best && best.best !== null
+      ? `あなたのベスト: ${fmtScore(best.best)}（${best.rounds}ラウンド）`
+      : "まだ記録がありません — 対戦するとベストスコアが記録されます";
+    const list = $("rank-list");
+    list.innerHTML = "<li class='rank-note'>読み込み中…</li>";
+    $("rank-updated").textContent = "";
+    const meD = devHash(deviceId());
+    try {
+      const r = await fetch("model/ranking.json", { cache: "no-cache" });
+      const data = await r.json();
+      const rows = (data.entries || []).slice(0, 20);
+      if (!rows.length) throw new Error("empty");
+      list.innerHTML = "";
+      rows.forEach((e, i) => {
+        const li = document.createElement("li");
+        li.className = "rank-row" + (e.d === meD ? " me" : "");
+        const pos = document.createElement("span");
+        pos.className = "rank-pos";
+        pos.textContent = i + 1;
+        const nm = document.createElement("span");
+        nm.className = "rank-name";
+        nm.textContent = (e.n || "名無し") + (e.d === meD ? "（あなた）" : "");
+        const sc = document.createElement("span");
+        sc.className = "rank-score";
+        sc.textContent = fmtScore(e.best);
+        li.append(pos, nm, sc);
+        list.appendChild(li);
+      });
+      if (data.updatedAt) {
+        $("rank-updated").textContent =
+          `集計: ${new Date(data.updatedAt).toLocaleString()}（6時間ごとに更新）`;
+      }
+    } catch {
+      list.innerHTML = "<li class='rank-note'>全体ランキングは集計待ちです（6時間ごとに更新）</li>";
+    }
+  };
+  $("rank-btn").addEventListener("click", showRanking);
+  $("rank-x").addEventListener("click", () => $("rank-overlay").classList.add("hidden"));
   $("start-room-btn").addEventListener("click", () => session && session.host && session.host.startGame());
   $("lobby-leave-btn").addEventListener("click", leaveSession);
   $("copy-link-btn").addEventListener("click", () => {
