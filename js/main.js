@@ -999,34 +999,48 @@ window.addEventListener("DOMContentLoaded", () => {
     list.innerHTML = "<li class='rank-note'>読み込み中…</li>";
     $("rank-updated").textContent = "";
     const meD = devHash(deviceId());
+    let rows = [];
+    let updatedAt = null;
     try {
       const r = await fetch("model/ranking.json", { cache: "no-cache" });
       const data = await r.json();
-      const rows = (data.entries || []).slice(0, 20);
-      if (!rows.length) throw new Error("empty");
-      list.innerHTML = "";
-      rows.forEach((e, i) => {
-        const li = document.createElement("li");
-        li.className = "rank-row" + (e.d === meD ? " me" : "");
-        const pos = document.createElement("span");
-        pos.className = "rank-pos";
-        pos.textContent = i + 1;
-        const nm = document.createElement("span");
-        nm.className = "rank-name";
-        nm.textContent = (e.n || "名無し") + (e.d === meD ? "（あなた）" : "");
-        const sc = document.createElement("span");
-        sc.className = "rank-score";
-        sc.textContent = fmtScore(e.best);
-        li.append(pos, nm, sc);
-        list.appendChild(li);
-      });
-      if (data.updatedAt) {
-        $("rank-updated").textContent =
-          `集計: ${new Date(data.updatedAt).toLocaleString()}（6時間ごとに更新）`;
+      rows = (data.entries || []).slice();
+      updatedAt = data.updatedAt || null;
+    } catch {}
+    // 自分のローカルベストは全体集計を待たずに即時合成する
+    if (best && best.best !== null && meD) {
+      const i = rows.findIndex((e) => e.d === meD);
+      if (i >= 0) {
+        if (best.best > rows[i].best) rows[i] = { ...rows[i], best: best.best, n: best.name || rows[i].n };
+      } else {
+        rows.push({ d: meD, n: best.name || storedName(), best: best.best, rounds: best.rounds });
       }
-    } catch {
-      list.innerHTML = "<li class='rank-note'>全体ランキングは集計待ちです（6時間ごとに更新）</li>";
+      rows.sort((a, b) => b.best - a.best);
     }
+    rows = rows.slice(0, 20);
+    if (!rows.length) {
+      list.innerHTML = "<li class='rank-note'>まだ記録がありません — 対戦するとここに載ります</li>";
+      return;
+    }
+    list.innerHTML = "";
+    rows.forEach((e, i) => {
+      const li = document.createElement("li");
+      li.className = "rank-row" + (e.d === meD ? " me" : "");
+      const pos = document.createElement("span");
+      pos.className = "rank-pos";
+      pos.textContent = i + 1;
+      const nm = document.createElement("span");
+      nm.className = "rank-name";
+      nm.textContent = (e.n || "名無し") + (e.d === meD ? "（あなた）" : "");
+      const sc = document.createElement("span");
+      sc.className = "rank-score";
+      sc.textContent = fmtScore(e.best);
+      li.append(pos, nm, sc);
+      list.appendChild(li);
+    });
+    $("rank-updated").textContent = updatedAt
+      ? `全体集計: ${new Date(updatedAt).toLocaleString()} — 対局から15分前後で反映（自分のベストは即時）`
+      : "全体集計は対局から15分前後で反映されます（自分のベストは即時）";
   };
   $("rank-btn").addEventListener("click", showRanking);
   $("rank-x").addEventListener("click", () => $("rank-overlay").classList.add("hidden"));

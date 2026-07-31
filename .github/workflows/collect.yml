@@ -56,4 +56,5 @@ jobs:
         run: |
           node tools/collector_headless.mjs \
             --minutes "${{ github.event.inputs.minutes || '50' }}" \
-            --out gdata --git-dir gdata
+            --out gdata --git-dir gdata \
+            --rank-root . --rank-interval 15

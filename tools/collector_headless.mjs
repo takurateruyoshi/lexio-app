@@ -27,6 +27,10 @@ const OUT = arg("out", "collected");
 const GIT_DIR = arg("git-dir", null);          // 例: gdata（game-data ブランチのworktree）
 const URL = arg("url", "https://takurateruyoshi.github.io/lexio-app/collector.html");
 const DRAIN_SEC = Number(arg("drain-sec", "300"));
+// ランキング即時反映: 新着牌譜があれば main の model/ranking.json を再集計して push
+// （Pages のビルド回数制限を考慮し RANK_MIN 分に1回まで）
+const RANK_ROOT = arg("rank-root", null);      // 例: .（mainのチェックアウト）
+const RANK_MIN = Number(arg("rank-interval", "15"));
 const RUN_ID = process.env.GITHUB_RUN_ID || String(Date.now());
 
 function chromePath() {
@@ -84,6 +88,37 @@ function commitPush(dir, n) {
   }
 }
 
+// 全牌譜からランキングを再集計し、変化があれば main へ push（Pages が再配信）
+let lastRankAt = 0;
+let rankDirty = false;
+function rankPush() {
+  if (!RANK_ROOT || !GIT_DIR) return;
+  if (!rankDirty || Date.now() - lastRankAt < RANK_MIN * 60 * 1000) return;
+  lastRankAt = Date.now();
+  rankDirty = false;
+  try {
+    execFileSync("node", ["tools/build_ranking.mjs",
+      "--records", path.join(GIT_DIR, "games"),
+      "--out", "model/ranking.json"], { cwd: RANK_ROOT, stdio: "inherit" });
+    // updatedAt だけの差分では push しない（entries/rounds の変化があるときのみ）
+    const diff = git(RANK_ROOT, "diff", "--numstat", "--", "model/ranking.json");
+    const changed = git(RANK_ROOT, "status", "--porcelain", "--", "model/ranking.json") !== "";
+    if (!changed || (diff && /^1\t1\t/.test(diff))) {
+      git(RANK_ROOT, "checkout", "--", "model/ranking.json");
+      return;
+    }
+    git(RANK_ROOT, "add", "model/ranking.json");
+    git(RANK_ROOT, "-c", "user.name=lexio-collector[bot]",
+        "-c", "user.email=lexio-collector[bot]@users.noreply.github.com",
+        "commit", "-m", "rank: update ranking.json");
+    try { git(RANK_ROOT, "pull", "--rebase", "origin", "main"); } catch {}
+    git(RANK_ROOT, "push", "origin", "HEAD:main");
+    console.log("[rank] pushed ranking.json");
+  } catch (e) {
+    console.error("[rank] update failed:", e.message);
+  }
+}
+
 const day = () => new Date().toISOString().slice(0, 10);
 
 async function main() {
@@ -122,12 +157,15 @@ async function main() {
     total += batch.length;
     console.log(`[drain] +${batch.length} records -> ${file} (total ${total})`);
     if (GIT_DIR) commitPush(GIT_DIR, batch.length);
+    rankDirty = true;
+    rankPush();
     return batch.length;
   };
 
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, Math.min(DRAIN_SEC * 1000, Math.max(1000, deadline - Date.now()))));
     await drainToFile();
+    rankPush();   // スロットル明けの持ち越し分
     // ブローカー切断などでエラー表示になっていたらリロードして再接続
     try {
       const status = await page.$eval("#status", (el) => el.textContent || "");
@@ -140,6 +178,8 @@ async function main() {
     }
   }
   await drainToFile();   // 終了間際の取りこぼし回収
+  lastRankAt = 0;        // 終了時は残りを必ず反映
+  rankPush();
   await browser.close();
   console.log(`done: ${total} records collected`);
 }
