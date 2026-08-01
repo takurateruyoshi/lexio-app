@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { buildRanking } from "./build_ranking.mjs";
 
 const require = createRequire(path.join(process.cwd(), "package.json"));
 let puppeteer;
@@ -25,7 +26,9 @@ function arg(name, dflt) {
 const MINUTES = Number(arg("minutes", "50"));
 const OUT = arg("out", "collected");
 const GIT_DIR = arg("git-dir", null);          // 例: gdata（game-data ブランチのworktree）
-const URL = arg("url", "https://takurateruyoshi.github.io/lexio-app/collector.html");
+const PEER_ID = arg("peer-id", null);          // 例: lexio-webapp-collect-2（第2ピア）
+const URL_BASE = arg("url", "https://takurateruyoshi.github.io/lexio-app/collector.html");
+const URL = PEER_ID ? `${URL_BASE}?peer=${encodeURIComponent(PEER_ID)}` : URL_BASE;
 const DRAIN_SEC = Number(arg("drain-sec", "300"));
 // ランキング即時反映: 新着牌譜があれば main の model/ranking.json を再集計して push
 // （Pages のビルド回数制限を考慮し RANK_MIN 分に1回まで）
@@ -133,7 +136,21 @@ async function main() {
   });
   const page = await browser.newPage();
   page.on("console", (m) => { if (m.type() === "error") console.log("[page]", m.text()); });
+
+  // 全履歴の正確なランキングをページに注入（ライブ購読の初期状態）
+  const seedRank = async () => {
+    if (!GIT_DIR) return;
+    try {
+      const data = buildRanking(path.join(GIT_DIR, "games"));
+      await page.evaluate((d) => window.__seedRanking && window.__seedRanking(d), data);
+      console.log(`[rank] seeded ${data.entries.length} devices (${data.rounds} rounds)`);
+    } catch (e) {
+      console.error("[rank] seed failed:", e.message);
+    }
+  };
+
   await page.goto(URL, { waitUntil: "networkidle2", timeout: 60000 });
+  await seedRank();
   console.log(`collector open: ${URL} (${MINUTES}min, drain ${DRAIN_SEC}s)`);
 
   let lastKey = null;
@@ -172,9 +189,13 @@ async function main() {
       if (/エラー/.test(status)) {
         console.log("[peer] error state -> reload");
         await page.reload({ waitUntil: "networkidle2", timeout: 60000 });
+        await seedRank();
       }
     } catch {
-      try { await page.reload({ waitUntil: "networkidle2", timeout: 60000 }); } catch {}
+      try {
+        await page.reload({ waitUntil: "networkidle2", timeout: 60000 });
+        await seedRank();
+      } catch {}
     }
   }
   await drainToFile();   // 終了間際の取りこぼし回収

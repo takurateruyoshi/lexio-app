@@ -70,6 +70,11 @@
 - **自動収集**: GitHub Actions（`.github/workflows/collect.yml`）が毎時、
   headless Chrome で収集ピアを約50分間開き、受信した牌譜を
   `game-data` ブランチに JSONL として蓄積します（`tools/collector_headless.mjs`）。
+  収集ピアは**ライブランキング**の購読/照会（`{t:"sub"}` / `{t:"rank"}`）にも応答し、
+  牌譜が届いた瞬間に購読中の全端末へ順位表をプッシュします。第2ピア
+  （`collect2.yml`・毎時25分起動・ID `lexio-webapp-collect-2`）が主ピアの停止帯を
+  カバーし、両方不在のときだけアプリは `model/ranking.json` スナップショットに
+  フォールバックします。
   牌譜は匿名化済みですが、公開リポジトリのブランチに置かれる点に留意してください。
   学習ワークフローはこのブランチを参照します。
 

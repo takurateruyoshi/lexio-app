@@ -9,7 +9,7 @@ import { CARD_DEFS, jokerPlayOptions } from "./cards.js";
 import { loadModel, getTheta } from "./model.js";
 import { saveGameRecord, exportRecordsToFile, countRecords, annotateBlocking } from "./replay.js";
 import { Tutorial } from "./tutorial.js";
-import { loadCollectConfig, queueRecord, flushOutbox, flushBeacon, isOptedOut, setOptOut } from "./collect.js";
+import { loadCollectConfig, queueRecord, flushOutbox, flushBeacon, isOptedOut, setOptOut, subscribeRanking } from "./collect.js";
 import { loadNetConfig, getIceServers } from "./netconfig.js";
 
 const STORE_SOLO = "lexio.solo.v1";
@@ -987,27 +987,18 @@ window.addEventListener("DOMContentLoaded", () => {
   $("name-save").addEventListener("click", saveNameFromModal);
   $("name-input").addEventListener("keydown", (e) => { if (e.key === "Enter") saveNameFromModal(); });
 
-  // ランキング（自分のベスト + 全端末ランキング）
+  // ランキング（自分のベスト即時 + P2Pライブ購読。ピア不在時はスナップショット）
   const fmtScore = (v) => (v > 0 ? "+" + v : String(v)) + "点";
-  const showRanking = async () => {
-    $("rank-overlay").classList.remove("hidden");
+  let rankSub = null;
+  let rankGotLive = false;
+  const renderRankData = (entries, label) => {
+    const meD = devHash(deviceId());
     const best = getLocalBest();
     $("rank-me").textContent = best && best.best !== null
       ? `あなたのベスト: ${fmtScore(best.best)}（${best.rounds}ラウンド）`
       : "まだ記録がありません — 対戦するとベストスコアが記録されます";
-    const list = $("rank-list");
-    list.innerHTML = "<li class='rank-note'>読み込み中…</li>";
-    $("rank-updated").textContent = "";
-    const meD = devHash(deviceId());
-    let rows = [];
-    let updatedAt = null;
-    try {
-      const r = await fetch("model/ranking.json", { cache: "no-cache" });
-      const data = await r.json();
-      rows = (data.entries || []).slice();
-      updatedAt = data.updatedAt || null;
-    } catch {}
-    // 自分のローカルベストは全体集計を待たずに即時合成する
+    let rows = (entries || []).slice();
+    // 自分のローカルベストは集計を待たずに合成
     if (best && best.best !== null && meD) {
       const i = rows.findIndex((e) => e.d === meD);
       if (i >= 0) {
@@ -1018,8 +1009,10 @@ window.addEventListener("DOMContentLoaded", () => {
       rows.sort((a, b) => b.best - a.best);
     }
     rows = rows.slice(0, 20);
+    const list = $("rank-list");
     if (!rows.length) {
       list.innerHTML = "<li class='rank-note'>まだ記録がありません — 対戦するとここに載ります</li>";
+      $("rank-updated").textContent = label;
       return;
     }
     list.innerHTML = "";
@@ -1038,12 +1031,39 @@ window.addEventListener("DOMContentLoaded", () => {
       li.append(pos, nm, sc);
       list.appendChild(li);
     });
-    $("rank-updated").textContent = updatedAt
-      ? `全体集計: ${new Date(updatedAt).toLocaleString()} — 対局から15分前後で反映（自分のベストは即時）`
-      : "全体集計は対局から15分前後で反映されます（自分のベストは即時）";
+    $("rank-updated").textContent = label;
+  };
+  const showRanking = () => {
+    $("rank-overlay").classList.remove("hidden");
+    $("rank-list").innerHTML = "<li class='rank-note'>接続中…</li>";
+    $("rank-updated").textContent = "";
+    renderRankData([], "ライブ集計に接続中…");
+    rankGotLive = false;
+    if (rankSub) rankSub.close();
+    rankSub = subscribeRanking(
+      (data) => {   // ライブ受信（対局が届くたびにプッシュされる）
+        rankGotLive = true;
+        renderRankData(data.entries, "🟢 ライブ — 対局終了と同時に更新されます");
+      },
+      async () => { // 両ピア不在 → スナップショットへ
+        if (rankGotLive) return;   // 一度でもライブ受信済みなら表示を維持
+        try {
+          const r = await fetch("model/ranking.json", { cache: "no-cache" });
+          const data = await r.json();
+          renderRankData(data.entries, data.updatedAt
+            ? `スナップショット集計: ${new Date(data.updatedAt).toLocaleString()}（自分のベストは即時）`
+            : "スナップショット集計（自分のベストは即時）");
+        } catch {
+          renderRankData([], "全体集計は準備中です（自分のベストは即時反映）");
+        }
+      });
+  };
+  const closeRanking = () => {
+    $("rank-overlay").classList.add("hidden");
+    if (rankSub) { rankSub.close(); rankSub = null; }
   };
   $("rank-btn").addEventListener("click", showRanking);
-  $("rank-x").addEventListener("click", () => $("rank-overlay").classList.add("hidden"));
+  $("rank-x").addEventListener("click", closeRanking);
   $("start-room-btn").addEventListener("click", () => session && session.host && session.host.startGame());
   $("lobby-leave-btn").addEventListener("click", leaveSession);
   $("copy-link-btn").addEventListener("click", () => {

@@ -8,7 +8,7 @@ import { openDb } from "./replay.js";
 import { getIceServers } from "./netconfig.js";
 
 const OPTOUT_KEY = "lexio.collect.optout";
-let CFG = { httpUrl: null, p2pId: "lexio-webapp-collect-1", enabled: true };
+let CFG = { httpUrl: null, p2pId: "lexio-webapp-collect-1", p2pId2: "lexio-webapp-collect-2", enabled: true };
 let flushing = false;
 let PENDING = [];   // このセッションで積んだ牌譜（pagehide時のsendBeacon用ミラー）
 
@@ -121,7 +121,7 @@ async function sendHttp(records) {
   if (!r.ok) throw new Error("http " + r.status);
 }
 
-function sendP2P(records) {
+function sendP2P(records, peerId = CFG.p2pId) {
   return new Promise((resolve, reject) => {
     let done = false;
     const finish = (ok, err) => {
@@ -135,13 +135,52 @@ function sendP2P(records) {
     const peer = new Peer({ config: { iceServers: getIceServers() } });
     peer.on("error", (e) => finish(false, e));
     peer.on("open", () => {
-      const conn = peer.connect(CFG.p2pId, { reliable: true });
+      const conn = peer.connect(peerId, { reliable: true });
       conn.on("open", () => conn.send({ t: "games", v: 1, records }));
       conn.on("data", (m) => { if (m && m.t === "ack") finish(true); });
       conn.on("error", (e) => finish(false, e));
       conn.on("close", () => finish(false));
     });
   });
+}
+
+// ライブランキングの購読。onRank(data) が届くたびに呼ばれる。
+// 主ピア → 第2ピアの順に試し、どちらも不在なら onDown()。切断時は自動で再購読を試みる。
+// 返り値の close() で購読解除。
+export function subscribeRanking(onRank, onDown) {
+  let peer = null;
+  let closed = false;
+  let idx = 0;
+  const ids = [CFG.p2pId, CFG.p2pId2].filter(Boolean);
+  const cleanup = () => { try { peer && peer.destroy(); } catch {} peer = null; };
+  const tryNext = () => {
+    if (closed) return;
+    if (typeof Peer === "undefined" || !ids.length || idx >= ids.length) {
+      cleanup();
+      if (onDown) onDown();
+      return;
+    }
+    const id = ids[idx++];
+    cleanup();
+    let got = false;
+    const giveUp = setTimeout(() => { if (!got && !closed) tryNext(); }, 5000);
+    peer = new Peer({ config: { iceServers: getIceServers() } });
+    peer.on("error", () => { clearTimeout(giveUp); if (!got && !closed) tryNext(); });
+    peer.on("open", () => {
+      const conn = peer.connect(id, { reliable: true });
+      conn.on("open", () => conn.send({ t: "sub" }));
+      conn.on("data", (m) => {
+        if (m && m.t === "rank") { got = true; clearTimeout(giveUp); onRank(m); }
+      });
+      conn.on("close", () => {
+        clearTimeout(giveUp);
+        if (!closed) { idx = 0; setTimeout(tryNext, 3000); }   // ピア交代を待って再購読
+      });
+      conn.on("error", () => { clearTimeout(giveUp); if (!got && !closed) tryNext(); });
+    });
+  };
+  tryNext();
+  return { close() { closed = true; cleanup(); } };
 }
 
 // キューの送信を試みる（失敗しても静かに保持し、次の機会に再送）
@@ -162,10 +201,18 @@ export async function flushOutbox() {
     }
     if (CFG.p2pId && typeof Peer !== "undefined") {
       try {
-        await sendP2P(records);
+        await sendP2P(records, CFG.p2pId);
         await deleteKeys(batch.map((b) => b.key));
         PENDING = [];
-      } catch { /* 収集ピア不在 — キュー保持 */ }
+      } catch {
+        // 主ピア不在 → 第2ピアへフォールバック
+        try {
+          if (!CFG.p2pId2) throw new Error("no secondary");
+          await sendP2P(records, CFG.p2pId2);
+          await deleteKeys(batch.map((b) => b.key));
+          PENDING = [];
+        } catch { /* 収集ピア不在 — キュー保持 */ }
+      }
     }
   } finally {
     flushing = false;

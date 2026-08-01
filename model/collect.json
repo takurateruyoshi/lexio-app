@@ -1,5 +1,6 @@
 {
   "enabled": true,
   "httpUrl": null,
-  "p2pId": "lexio-webapp-collect-1"
+  "p2pId": "lexio-webapp-collect-1",
+  "p2pId2": "lexio-webapp-collect-2"
 }

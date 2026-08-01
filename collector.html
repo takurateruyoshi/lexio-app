@@ -23,6 +23,10 @@
         <div class="cs-num" id="session-count">0</div>
         <div class="cs-label">このセッションで受信</div>
       </div>
+      <div class="collector-stat">
+        <div class="cs-num" id="sub-count">0</div>
+        <div class="cs-label">ランキング購読中</div>
+      </div>
     </div>
     <p class="hint" id="last-recv"></p>
     <div class="setup-row">
@@ -38,8 +42,86 @@
 <script src="vendor/peerjs.min.js"></script>
 <script type="module">
 import { loadNetConfig, getIceServers } from "./js/netconfig.js";
-const PEER_ID = "lexio-webapp-collect-1";
+const PEER_ID = new URLSearchParams(location.search).get("peer") || "lexio-webapp-collect-1";
 const $ = (id) => document.getElementById(id);
+document.addEventListener("DOMContentLoaded", () => { $("peer-id").textContent = PEER_ID; });
+
+// ---- ライブランキング（メモリ内集計 + 購読者へプッシュ配信） ----
+// build_ranking.mjs と同じ規則: practice/spectate 除外、at|round で重複除去、best は max。
+const rankMap = new Map();   // d -> { d, n, nAt, best, at, rounds }
+const rankSeen = new Set();
+let rankUpdatedAt = null;
+const subscribers = new Set();
+
+function applyRecordToRank(rec) {
+  if (!rec || !Array.isArray(rec.players) || !Array.isArray(rec.scores)) return false;
+  if (rec.mode === "practice" || rec.mode === "spectate") return false;
+  const key = `${rec.at}|${rec.round}`;
+  if (rankSeen.has(key)) return false;
+  rankSeen.add(key);
+  let changed = false;
+  rec.players.forEach((p, i) => {
+    if (!p || !p.d || typeof rec.scores[i] !== "number") return;
+    let e = rankMap.get(p.d);
+    if (!e) { e = { d: p.d, n: null, nAt: "", best: null, at: null, rounds: 0 }; rankMap.set(p.d, e); }
+    e.rounds++;
+    if (p.n && (rec.at || "") >= e.nAt) { e.n = p.n; e.nAt = rec.at || ""; }
+    if (e.best === null || rec.scores[i] > e.best) {
+      e.best = rec.scores[i]; e.at = rec.at || null; changed = true;
+    }
+  });
+  return changed;
+}
+
+function rankMessage() {
+  const entries = [...rankMap.values()]
+    .filter((e) => e.best !== null)
+    .sort((a, b) => b.best - a.best || b.rounds - a.rounds)
+    .slice(0, 100)
+    .map(({ nAt, ...e }) => e);
+  return { t: "rank", live: true, updatedAt: rankUpdatedAt || new Date().toISOString(), entries };
+}
+
+function pushRankToSubscribers() {
+  rankUpdatedAt = new Date().toISOString();
+  const msg = rankMessage();
+  for (const conn of [...subscribers]) {
+    try { conn.send(msg); } catch { subscribers.delete(conn); }
+  }
+  $("sub-count").textContent = subscribers.size;
+}
+
+// ヘッドレス運用時に全履歴の正確な集計を注入するためのフック
+// （best は max 合成なので IndexedDB 分と二重適用しても順位は壊れない）
+window.__seedRanking = (data) => {
+  for (const e of (data && data.entries) || []) {
+    const cur = rankMap.get(e.d);
+    if (!cur || e.best > cur.best) {
+      rankMap.set(e.d, { d: e.d, n: e.n, nAt: "", best: e.best, at: e.at || null,
+                         rounds: Math.max(e.rounds || 0, cur ? cur.rounds : 0) });
+    }
+  }
+  rankUpdatedAt = (data && data.updatedAt) || rankUpdatedAt;
+  pushRankToSubscribers();
+  logLine(`ランキングシード適用（${(data && data.entries || []).length}件）`);
+};
+
+// 起動時シード: 配信済みスナップショット + このブラウザに残っている受信済み牌譜
+async function seedRankingAtStartup() {
+  try {
+    const r = await fetch("model/ranking.json", { cache: "no-cache" });
+    if (r.ok) {
+      const data = await r.json();
+      for (const e of data.entries || []) {
+        rankMap.set(e.d, { d: e.d, n: e.n, nAt: "", best: e.best, at: e.at || null, rounds: e.rounds || 0 });
+      }
+      rankUpdatedAt = data.updatedAt || null;
+    }
+  } catch {}
+  try {
+    for (const rec of await getAll()) applyRecordToRank(rec);
+  } catch {}
+}
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -104,14 +186,32 @@ function startPeer(retry = 0) {
     }
   });
   peer.on("connection", (conn) => {
+    conn.on("close", () => { subscribers.delete(conn); $("sub-count").textContent = subscribers.size; });
+    conn.on("error", () => { subscribers.delete(conn); $("sub-count").textContent = subscribers.size; });
     conn.on("data", async (m) => {
-      if (!m || m.t !== "games" || !Array.isArray(m.records)) return;
+      if (!m) return;
+      if (m.t === "rank") {           // 単発照会
+        conn.send(rankMessage());
+        setTimeout(() => { try { conn.close(); } catch {} }, 2000);
+        return;
+      }
+      if (m.t === "sub") {            // 購読: 即時に現状を返し、以後の更新をプッシュ
+        subscribers.add(conn);
+        $("sub-count").textContent = subscribers.size;
+        conn.send(rankMessage());
+        return;
+      }
+      if (m.t !== "games" || !Array.isArray(m.records)) return;
       await store(m.records);
       sessionCount += m.records.length;
       conn.send({ t: "ack", n: m.records.length });
       logLine(`${m.records.length} ラウンド受信`);
       $("last-recv").textContent = `直近の受信: ${new Date().toLocaleString()}`;
       refresh();
+      // ライブランキングを更新し、変化があれば購読者へ即プッシュ
+      let changed = false;
+      for (const rec of m.records) changed = applyRecordToRank(rec) || changed;
+      if (changed) pushRankToSubscribers();
       setTimeout(() => { try { conn.close(); } catch {} }, 2000);
     });
   });
@@ -135,7 +235,7 @@ $("clear-btn").addEventListener("click", async () => {
 });
 
 refresh();
-loadNetConfig().then(() => startPeer());
+seedRankingAtStartup().then(() => loadNetConfig()).then(() => startPeer());
 </script>
 </body>
 </html>
