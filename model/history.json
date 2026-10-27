@@ -1,25 +1,5 @@
 [
   {
-    "at": "2026-09-03T20:53:08.465Z",
-    "kind": "evolve",
-    "champion": "selfplay",
-    "arena": {
-      "champion": 0.125,
-      "selfplay": 0.303,
-      "human": -0.47
-    },
-    "arenaGames": 300,
-    "imitPoints": 376,
-    "imitOn": true,
-    "imitRate": 0.613,
-    "records": 89,
-    "gens": {
-      "selfplay": 3,
-      "human": 3
-    },
-    "gamesPlayed": 1164
-  },
-  {
     "at": "2026-09-04T03:29:56.475Z",
     "kind": "evolve",
     "champion": "champion",
@@ -3998,5 +3978,25 @@
       "human": 2
     },
     "gamesPlayed": 1020
+  },
+  {
+    "at": "2026-10-27T22:11:10.956Z",
+    "kind": "evolve",
+    "champion": "human",
+    "arena": {
+      "champion": -0.873,
+      "selfplay": 0.273,
+      "human": 0.89
+    },
+    "arenaGames": 300,
+    "imitPoints": 573,
+    "imitOn": true,
+    "imitRate": 0.675,
+    "records": 124,
+    "gens": {
+      "selfplay": 4,
+      "human": 4
+    },
+    "gamesPlayed": 1452
   }
 ]
