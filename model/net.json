@@ -10,8 +10,8 @@
         "turn:turn.cloudflare.com:3478?transport=tcp",
         "turns:turn.cloudflare.com:5349?transport=tcp"
       ],
-      "username": "g0c64a3b6903658c2918d9b1714289692ee0a54ad18fdcb64cb8313bca57de91",
-      "credential": "03896a74917fccf5f61948ae7d95240d6c1f946da903210f3455ee36550752da"
+      "username": "g03b92bfcf6ee7d9afb3107ec31b1bfe769e54382fa064a5f48f4b37e780c08a",
+      "credential": "331deedb1452bdebfe729f13f9d44cc4a9a7967b7f85d024ffae2959c88a3345"
     }
   ]
 }
